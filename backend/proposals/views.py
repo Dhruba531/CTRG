@@ -32,9 +32,12 @@ class GrantCycleViewSet(viewsets.ModelViewSet):
     ViewSet for Grant Cycle management.
     Only SRC Chair (admin) can create/update cycles.
     """
-    queryset = GrantCycle.objects.all()
     serializer_class = GrantCycleSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        """Optimized queryset with prefetch for better performance."""
+        return GrantCycle.objects.all().prefetch_related('proposals')
     
     @action(detail=True, methods=['get'])
     def statistics(self, request, pk=None):
@@ -74,30 +77,45 @@ class ProposalViewSet(viewsets.ModelViewSet):
     - PIs see only their own proposals
     - Reviewers see assigned proposals
     - Admin sees all
+
+    OPTIMIZED: Uses select_related and prefetch_related to reduce database queries
     """
-    queryset = Proposal.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get_serializer_class(self):
         if self.action == 'list':
             return ProposalListSerializer
         return ProposalSerializer
-    
+
     def get_queryset(self):
+        """
+        Optimized queryset that reduces N+1 queries.
+        Uses select_related for ForeignKey and prefetch_related for reverse FKs.
+        """
         user = self.request.user
-        
+
+        # Base queryset with optimizations
+        base_queryset = Proposal.objects.select_related(
+            'pi',           # ForeignKey to User
+            'cycle'         # ForeignKey to GrantCycle
+        ).prefetch_related(
+            'reviews',      # Reverse FK to ReviewAssignments
+            'stage1_decision',  # Reverse FK to Stage1Decision
+            'final_decision'    # Reverse FK to FinalDecision
+        )
+
         # Admin sees all
         if user.is_staff:
-            return Proposal.objects.all()
-        
+            return base_queryset.all()
+
         # Check if user is a reviewer
         from reviews.models import ReviewAssignment
         reviewer_proposal_ids = ReviewAssignment.objects.filter(
             reviewer=user
         ).values_list('proposal_id', flat=True)
-        
+
         # Return own proposals + assigned proposals
-        return Proposal.objects.filter(
+        return base_queryset.filter(
             Q(pi=user) | Q(id__in=reviewer_proposal_ids)
         ).distinct()
     

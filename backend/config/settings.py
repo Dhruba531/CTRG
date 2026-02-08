@@ -95,6 +95,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # GZip compression middleware (should be near the top after security middleware)
+    'django.middleware.gzip.GZipMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -129,7 +132,7 @@ if env('DATABASE_ENGINE') == 'django.db.backends.sqlite3':
             'NAME': BASE_DIR / env('DATABASE_NAME'),
         }
     }
-# PostgreSQL for production
+# PostgreSQL for production with connection pooling
 else:
     DATABASES = {
         'default': {
@@ -139,6 +142,12 @@ else:
             'PASSWORD': env('DATABASE_PASSWORD', default=''),
             'HOST': env('DATABASE_HOST', default='localhost'),
             'PORT': env('DATABASE_PORT', default='5432'),
+            # Connection pooling for better performance
+            'CONN_MAX_AGE': 600,  # Keep connections alive for 10 minutes
+            'OPTIONS': {
+                'connect_timeout': 10,
+                'options': '-c statement_timeout=30000',  # 30 second query timeout
+            },
         }
     }
 
@@ -244,6 +253,18 @@ REST_FRAMEWORK = {
     # Date/time formatting
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
     'DATE_FORMAT': '%Y-%m-%d',
+
+    # Throttling (Rate Limiting)
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',      # Anonymous users: 100 requests per hour
+        'user': '1000/hour',     # Authenticated users: 1000 requests per hour
+        'login': '5/minute',     # Login endpoint: 5 attempts per minute (brute force protection)
+        'upload': '20/hour',     # File uploads: 20 per hour
+    },
 }
 
 # ========================================

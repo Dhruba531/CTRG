@@ -19,15 +19,18 @@ class ReviewerProfileViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing reviewer profiles.
     Admin can manage all, reviewers can view their own.
+    OPTIMIZED: Uses select_related to reduce database queries.
     """
-    queryset = ReviewerProfile.objects.all()
     serializer_class = ReviewerProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get_queryset(self):
+        """Optimized queryset with select_related for User and prefetch for assignments."""
+        base_queryset = ReviewerProfile.objects.select_related('user').prefetch_related('assignments')
+
         if self.request.user.is_staff:
-            return ReviewerProfile.objects.all()
-        return ReviewerProfile.objects.filter(user=self.request.user)
+            return base_queryset.all()
+        return base_queryset.filter(user=self.request.user)
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAdminUser])
     def workloads(self, request):
@@ -53,16 +56,32 @@ class ReviewerProfileViewSet(viewsets.ModelViewSet):
 class ReviewAssignmentViewSet(viewsets.ModelViewSet):
     """
     ViewSet for review assignments.
+    OPTIMIZED: Uses select_related and prefetch_related to minimize database hits.
     """
-    queryset = ReviewAssignment.objects.all()
     serializer_class = ReviewAssignmentSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get_queryset(self):
+        """
+        Optimized queryset that reduces N+1 queries.
+        Eager loads related proposal, reviewer, and scores.
+        """
         user = self.request.user
+
+        base_queryset = ReviewAssignment.objects.select_related(
+            'proposal',                    # ForeignKey
+            'proposal__pi',                # Through proposal
+            'proposal__cycle',             # Through proposal
+            'reviewer',                    # ForeignKey
+            'reviewer__user'               # Through reviewer
+        ).prefetch_related(
+            'stage1_scores',               # Reverse FK
+            'stage2_review'                # Reverse FK
+        )
+
         if user.is_staff:
-            return ReviewAssignment.objects.all()
-        return ReviewAssignment.objects.filter(reviewer=user)
+            return base_queryset.all()
+        return base_queryset.filter(reviewer=user)
     
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def assign_reviewers(self, request):
