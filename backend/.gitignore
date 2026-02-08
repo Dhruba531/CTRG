@@ -1,0 +1,71 @@
+# ========================================
+# CTRG Grant System - Git Ignore File
+# ========================================
+# Files and directories that should NOT be committed to version control
+
+# ========================================
+# Python
+# ========================================
+*.py[cod]
+*$py.class
+*.so
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ========================================
+# Django
+# ========================================
+*.log
+*.pot
+*.pyc
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+
+# ========================================
+# Environment & Secrets
+# ========================================
+.env
+.env.*
+!.env.example
+*.env
+venv/
+env/
+ENV/
+.venv/
+
+# ========================================
+# IDE & Editor
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ========================================
+# Testing
+# ========================================
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.tox/
+.hypothesis/
+
+# ========================================
+# Celery
+# ========================================
+celerybeat-schedule
+celerybeat.pid
+
+# ========================================
+# Misc
+# ========================================
+*.bak
+*.tmp
+.ipynb_checkpoints/

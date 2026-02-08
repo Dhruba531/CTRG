@@ -33,6 +33,14 @@ dist/
 dist-ssr/
 *.local
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+# Keep .env.development and .env.production as templates
+# !.env.development
+# !.env.production
+
 # IDEs
 .vscode/
 .idea/

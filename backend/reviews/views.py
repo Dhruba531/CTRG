@@ -1,0 +1,240 @@
+"""
+API Views for the reviews module.
+"""
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
+
+from .models import ReviewerProfile, ReviewAssignment, Stage1Score, Stage2Review
+from .serializers import (
+    ReviewerProfileSerializer, ReviewAssignmentSerializer,
+    ReviewAssignmentCreateSerializer, Stage1ScoreSerializer, Stage2ReviewSerializer,
+    ReviewerWorkloadSerializer
+)
+from proposals.services import ReviewerService, EmailService, ProposalService
+
+
+class ReviewerProfileViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing reviewer profiles.
+    Admin can manage all, reviewers can view their own.
+    """
+    queryset = ReviewerProfile.objects.all()
+    serializer_class = ReviewerProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return ReviewerProfile.objects.all()
+        return ReviewerProfile.objects.filter(user=self.request.user)
+    
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAdminUser])
+    def workloads(self, request):
+        """Get workload statistics for all reviewers."""
+        stats = ReviewerService.get_all_reviewers_stats()
+        serializer = ReviewerWorkloadSerializer(stats, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def my_profile(self, request):
+        """Get current user's reviewer profile."""
+        try:
+            profile = ReviewerProfile.objects.get(user=request.user)
+            serializer = self.get_serializer(profile)
+            return Response(serializer.data)
+        except ReviewerProfile.DoesNotExist:
+            return Response(
+                {'error': 'Reviewer profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ReviewAssignmentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for review assignments.
+    """
+    queryset = ReviewAssignment.objects.all()
+    serializer_class = ReviewAssignmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return ReviewAssignment.objects.all()
+        return ReviewAssignment.objects.filter(reviewer=user)
+    
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def assign_reviewers(self, request):
+        """Bulk assign reviewers to a proposal (SRC Chair only)."""
+        serializer = ReviewAssignmentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        from proposals.models import Proposal
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        try:
+            proposal = Proposal.objects.get(id=serializer.validated_data['proposal_id'])
+        except Proposal.DoesNotExist:
+            return Response({'error': 'Proposal not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        assignments = []
+        errors = []
+        
+        for reviewer_id in serializer.validated_data['reviewer_ids']:
+            try:
+                reviewer = User.objects.get(id=reviewer_id)
+                assignment = ReviewerService.assign_reviewer(
+                    proposal=proposal,
+                    reviewer=reviewer,
+                    stage=serializer.validated_data['stage'],
+                    deadline=serializer.validated_data['deadline'],
+                    user=request.user
+                )
+                assignments.append(assignment)
+            except User.DoesNotExist:
+                errors.append({'reviewer_id': reviewer_id, 'error': 'User not found'})
+            except ValueError as e:
+                errors.append({'reviewer_id': reviewer_id, 'error': str(e)})
+        
+        return Response({
+            'assigned': ReviewAssignmentSerializer(assignments, many=True).data,
+            'errors': errors
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def send_notification(self, request, pk=None):
+        """Send notification email to reviewer."""
+        assignment = self.get_object()
+        success = EmailService.send_reviewer_assignment_email(assignment)
+        
+        if success:
+            return Response({'status': 'Notification sent successfully.'})
+        return Response(
+            {'error': 'Failed to send notification'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def bulk_notify(self, request):
+        """Send notifications to multiple reviewers."""
+        assignment_ids = request.data.get('assignment_ids', [])
+        
+        if not assignment_ids:
+            return Response(
+                {'error': 'No assignment IDs provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        assignments = ReviewAssignment.objects.filter(
+            id__in=assignment_ids,
+            notification_sent=False
+        )
+        
+        sent_count = 0
+        for assignment in assignments:
+            if EmailService.send_reviewer_assignment_email(assignment):
+                sent_count += 1
+        
+        return Response({
+            'sent': sent_count,
+            'total': len(assignment_ids)
+        })
+    
+    @action(detail=True, methods=['post'])
+    def submit_score(self, request, pk=None):
+        """Submit Stage 1 or Stage 2 review."""
+        assignment = self.get_object()
+        
+        # Verify reviewer
+        if assignment.reviewer != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'Not authorized to submit this review'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if assignment.status == ReviewAssignment.Status.COMPLETED:
+            return Response(
+                {'error': 'Review already completed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Handle Stage 1
+        if assignment.stage == ReviewAssignment.Stage.STAGE_1:
+            serializer = Stage1ScoreSerializer(data=request.data)
+            if serializer.is_valid():
+                # Check if draft already exists
+                try:
+                    existing = assignment.stage1_score
+                    # Update existing
+                    for key, value in serializer.validated_data.items():
+                        setattr(existing, key, value)
+                    existing.save()
+                    score = existing
+                except Stage1Score.DoesNotExist:
+                    score = serializer.save(assignment=assignment)
+                
+                # If not draft, mark complete
+                if not score.is_draft:
+                    assignment.status = ReviewAssignment.Status.COMPLETED
+                    assignment.save()
+                    
+                    # Check if all Stage 1 reviews complete
+                    ProposalService.check_stage1_completion(assignment.proposal)
+                
+                return Response(Stage1ScoreSerializer(score).data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Handle Stage 2
+        elif assignment.stage == ReviewAssignment.Stage.STAGE_2:
+            serializer = Stage2ReviewSerializer(data=request.data)
+            if serializer.is_valid():
+                try:
+                    existing = assignment.stage2_review
+                    for key, value in serializer.validated_data.items():
+                        setattr(existing, key, value)
+                    existing.save()
+                    review = existing
+                except Stage2Review.DoesNotExist:
+                    review = serializer.save(assignment=assignment)
+                
+                if not review.is_draft:
+                    assignment.status = ReviewAssignment.Status.COMPLETED
+                    assignment.save()
+                
+                return Response(Stage2ReviewSerializer(review).data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({'error': 'Invalid stage'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def proposal_details(self, request, pk=None):
+        """Get full proposal details for review."""
+        from proposals.serializers import ProposalSerializer
+        
+        assignment = self.get_object()
+        
+        # Verify access
+        if assignment.reviewer != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'Not authorized'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        proposal = assignment.proposal
+        proposal_data = ProposalSerializer(proposal).data
+        
+        # For Stage 2, include Stage 1 reviews
+        if assignment.stage == ReviewAssignment.Stage.STAGE_2:
+            stage1_assignments = ReviewAssignment.objects.filter(
+                proposal=proposal,
+                stage=ReviewAssignment.Stage.STAGE_1,
+                status=ReviewAssignment.Status.COMPLETED
+            )
+            proposal_data['stage1_reviews'] = ReviewAssignmentSerializer(
+                stage1_assignments, many=True
+            ).data
+        
+        return Response(proposal_data)
