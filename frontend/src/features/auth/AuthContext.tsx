@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as authService from '../../services/authService';
 
+import type { LoginResponse } from '../../services/authService';
+
 interface AuthContextType {
     user: any;
     role: string | null;
     token: string | null;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<LoginResponse>;
     logout: () => void;
     isAuthenticated: boolean;
 }
@@ -38,6 +40,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('token', data.access);
         localStorage.setItem('role', data.role);
         localStorage.setItem('user', JSON.stringify(data.user));
+
+        return data;
     };
 
     const logout = () => {

@@ -26,7 +26,7 @@ class ReviewerProfileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Optimized queryset with select_related for User and prefetch for assignments."""
-        base_queryset = ReviewerProfile.objects.select_related('user').prefetch_related('assignments')
+        base_queryset = ReviewerProfile.objects.select_related('user').prefetch_related('user__review_assignments')
 
         if self.request.user.is_staff:
             return base_queryset.all()
@@ -70,13 +70,10 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
 
         base_queryset = ReviewAssignment.objects.select_related(
             'proposal',                    # ForeignKey
-            'proposal__pi',                # Through proposal
             'proposal__cycle',             # Through proposal
-            'reviewer',                    # ForeignKey
-            'reviewer__user'               # Through reviewer
-        ).prefetch_related(
-            'stage1_scores',               # Reverse FK
-            'stage2_review'                # Reverse FK
+            'reviewer',                    # ForeignKey to User
+            'stage1_score',                # OneToOne reverse
+            'stage2_review'                # OneToOne reverse
         )
 
         if user.is_staff:

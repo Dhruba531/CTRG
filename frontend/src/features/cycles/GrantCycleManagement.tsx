@@ -53,25 +53,10 @@ const GrantCycleManagement: React.FC = () => {
             setLoading(true);
             const response = await cycleApi.getAll();
             setCycles(response.data);
+            setError(null);
         } catch (err) {
-            setError('Failed to load grant cycles');
-            // Mock data for demo
-            setCycles([
-                {
-                    id: 1, name: 'Spring 2025 Grant Cycle', year: '2024-2025',
-                    start_date: '2025-01-15', end_date: '2025-04-30',
-                    stage1_review_start_date: '2025-02-01', stage1_review_end_date: '2025-02-28',
-                    stage2_review_start_date: '2025-03-15', stage2_review_end_date: '2025-04-15',
-                    revision_window_days: 7, acceptance_threshold: 70, max_reviewers_per_proposal: 2,
-                    is_active: true, proposal_count: 12
-                },
-                {
-                    id: 2, name: 'Fall 2024 Grant Cycle', year: '2024-2025',
-                    start_date: '2024-09-01', end_date: '2024-12-15',
-                    revision_window_days: 7, acceptance_threshold: 70, max_reviewers_per_proposal: 2,
-                    is_active: false, proposal_count: 24
-                },
-            ]);
+            setError('Failed to load grant cycles. Please check your connection.');
+            console.error(err);
         } finally {
             setLoading(false);
         }

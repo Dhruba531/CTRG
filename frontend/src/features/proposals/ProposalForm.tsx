@@ -11,9 +11,14 @@ import { proposalApi, cycleApi, type GrantCycle } from '../../services/api';
 interface ProposalFormData {
     title: string;
     abstract: string;
+    pi_name: string;
+    pi_department: string;
+    pi_email: string;
+    co_investigators: string;
     fund_requested: number;
     cycle: number | '';
     file: File | null;
+    templateFile: File | null;
 }
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -31,11 +36,17 @@ const ProposalForm: React.FC = () => {
     const [formData, setFormData] = useState<ProposalFormData>({
         title: '',
         abstract: '',
+        pi_name: '',
+        pi_department: '',
+        pi_email: '',
+        co_investigators: '',
         fund_requested: 0,
         cycle: '',
         file: null,
+        templateFile: null,
     });
     const [existingFile, setExistingFile] = useState<string | null>(null);
+    const [existingTemplate, setExistingTemplate] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -49,14 +60,9 @@ const ProposalForm: React.FC = () => {
             try {
                 const cycleRes = await cycleApi.getAll();
                 setCycles(cycleRes.data.filter(c => c.is_active));
-            } catch {
-                setCycles([
-                    {
-                        id: 1, name: 'Spring 2025', year: 2025, submission_start: '2025-01-01', submission_end: '2025-03-31',
-                        review_deadline_stage1: '2025-04-30', revision_deadline_days: 14, review_deadline_stage2: '2025-06-15',
-                        stage1_threshold: 60, final_decision_date: '2025-06-30', is_active: true
-                    },
-                ]);
+            } catch (err) {
+                console.error("Failed to load cycles", err);
+                setError("Failed to load grant cycles.");
             }
 
             // Load existing proposal if editing
@@ -66,20 +72,21 @@ const ProposalForm: React.FC = () => {
                     setFormData({
                         title: propRes.data.title,
                         abstract: propRes.data.abstract,
+                        pi_name: propRes.data.pi_name || '',
+                        pi_department: propRes.data.pi_department || '',
+                        pi_email: propRes.data.pi_email || '',
+                        co_investigators: propRes.data.co_investigators || '',
                         fund_requested: propRes.data.fund_requested,
                         cycle: propRes.data.cycle,
                         file: null,
+                        templateFile: null,
                     });
                     setExistingFile(propRes.data.proposal_file || null);
-                } catch {
-                    // Mock for demo
-                    setFormData({
-                        title: 'Quantum Computing Applications',
-                        abstract: 'This research explores quantum computing applications in cryptography and optimization.',
-                        fund_requested: 60000,
-                        cycle: 1,
-                        file: null,
-                    });
+                    setExistingTemplate((propRes.data as any).application_template_file || null);
+                } catch (err) {
+                    console.error("Failed to load proposal", err);
+                    setError("Failed to load proposal details.");
+                    navigate('/pi/dashboard');
                 }
             }
         } finally {
@@ -111,8 +118,28 @@ const ProposalForm: React.FC = () => {
         }
     };
 
+    const handleTemplateFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > MAX_FILE_SIZE) {
+                setError('File size exceeds 50MB limit');
+                return;
+            }
+            if (!['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
+                setError('Only PDF and Word documents are allowed');
+                return;
+            }
+            setFormData(prev => ({ ...prev, templateFile: file }));
+            setError(null);
+        }
+    };
+
     const removeFile = () => {
         setFormData(prev => ({ ...prev, file: null }));
+    };
+
+    const removeTemplateFile = () => {
+        setFormData(prev => ({ ...prev, templateFile: null }));
     };
 
     const validateForm = (): boolean => {
@@ -139,20 +166,28 @@ const ProposalForm: React.FC = () => {
         return true;
     };
 
+    const buildFormData = () => {
+        const data = new FormData();
+        data.append('title', formData.title);
+        data.append('abstract', formData.abstract);
+        if (formData.pi_name) data.append('pi_name', formData.pi_name);
+        if (formData.pi_department) data.append('pi_department', formData.pi_department);
+        if (formData.pi_email) data.append('pi_email', formData.pi_email);
+        if (formData.co_investigators) data.append('co_investigators', formData.co_investigators);
+        data.append('fund_requested', String(formData.fund_requested));
+        data.append('cycle', String(formData.cycle));
+        if (formData.file) data.append('proposal_file', formData.file);
+        if (formData.templateFile) data.append('application_template_file', formData.templateFile);
+        return data;
+    };
+
     const handleSaveDraft = async () => {
         try {
             setSubmitting(true);
             setError(null);
 
-            const data = new FormData();
-            data.append('title', formData.title);
-            data.append('abstract', formData.abstract);
-            data.append('fund_requested', String(formData.fund_requested));
-            data.append('cycle', String(formData.cycle));
+            const data = buildFormData();
             data.append('status', 'DRAFT');
-            if (formData.file) {
-                data.append('proposal_file', formData.file);
-            }
 
             if (isEditing) {
                 await proposalApi.update(Number(id), data);
@@ -180,15 +215,8 @@ const ProposalForm: React.FC = () => {
             setSubmitting(true);
             setError(null);
 
-            const data = new FormData();
-            data.append('title', formData.title);
-            data.append('abstract', formData.abstract);
-            data.append('fund_requested', String(formData.fund_requested));
-            data.append('cycle', String(formData.cycle));
+            const data = buildFormData();
             data.append('status', 'SUBMITTED');
-            if (formData.file) {
-                data.append('proposal_file', formData.file);
-            }
 
             if (isEditing) {
                 await proposalApi.update(Number(id), data);
@@ -255,10 +283,69 @@ const ProposalForm: React.FC = () => {
                         <option value="">Select a grant cycle</option>
                         {cycles.map(cycle => (
                             <option key={cycle.id} value={cycle.id}>
-                                {cycle.name} ({cycle.year}){cycle.submission_end ? ` - Deadline: ${new Date(cycle.submission_end).toLocaleDateString()}` : ''}
+                                {cycle.name} ({cycle.year}){cycle.end_date ? ` - Deadline: ${new Date(cycle.end_date).toLocaleDateString()}` : ''}
                             </option>
                         ))}
                     </select>
+                </div>
+
+                {/* PI Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block font-medium text-gray-900 mb-2">
+                            PI Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="pi_name"
+                            value={formData.pi_name}
+                            onChange={handleChange}
+                            placeholder="Principal Investigator name"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-medium text-gray-900 mb-2">
+                            Department <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="pi_department"
+                            value={formData.pi_department}
+                            onChange={handleChange}
+                            placeholder="e.g., Computer Science"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block font-medium text-gray-900 mb-2">
+                            PI Email <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="email"
+                            name="pi_email"
+                            value={formData.pi_email}
+                            onChange={handleChange}
+                            placeholder="pi@nsu.edu"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-medium text-gray-900 mb-2">
+                            Co-Investigators
+                        </label>
+                        <input
+                            type="text"
+                            name="co_investigators"
+                            value={formData.co_investigators}
+                            onChange={handleChange}
+                            placeholder="Comma-separated names (optional)"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
                 </div>
 
                 {/* Title */}
@@ -358,6 +445,56 @@ const ProposalForm: React.FC = () => {
                                 type="file"
                                 accept=".pdf,.doc,.docx"
                                 onChange={handleFileChange}
+                                className="hidden"
+                            />
+                        </label>
+                    )}
+                </div>
+
+                {/* Application Template Upload */}
+                <div>
+                    <label className="block font-medium text-gray-900 mb-2">
+                        Application Template
+                    </label>
+                    <p className="text-sm text-gray-500 mb-3">
+                        Upload the Research Grant Application Template (PDF or Word, max 50MB)
+                    </p>
+
+                    {existingTemplate && !formData.templateFile && (
+                        <div className="mb-3 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center">
+                                <FileText size={20} className="text-gray-500 mr-2" />
+                                <span className="text-sm text-gray-700">Current template: {existingTemplate}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {formData.templateFile ? (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center">
+                                <FileText size={24} className="text-green-600 mr-3" />
+                                <div>
+                                    <p className="font-medium text-gray-900">{formData.templateFile.name}</p>
+                                    <p className="text-sm text-gray-500">
+                                        {(formData.templateFile.size / (1024 * 1024)).toFixed(2)} MB
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={removeTemplateFile} className="text-gray-400 hover:text-red-600">
+                                <X size={20} />
+                            </button>
+                        </div>
+                    ) : (
+                        <label className="block cursor-pointer">
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-400 hover:bg-green-50 transition-colors">
+                                <Upload size={32} className="mx-auto text-gray-400 mb-2" />
+                                <p className="font-medium text-gray-700">Click to upload template</p>
+                                <p className="text-sm text-gray-500">PDF or Word document (max 50MB)</p>
+                            </div>
+                            <input
+                                type="file"
+                                accept=".pdf,.doc,.docx"
+                                onChange={handleTemplateFileChange}
                                 className="hidden"
                             />
                         </label>

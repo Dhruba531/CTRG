@@ -26,7 +26,11 @@ from .views import (
     UserRegistrationView,
     ChangePasswordView,
     UserListView,
-    UserDetailView
+    UserDetailView,
+    ReviewerPublicRegistrationView,
+    PendingReviewersView,
+    ApproveReviewerView,
+    RejectReviewerView
 )
 
 # App name for namespacing (optional but recommended)
@@ -47,6 +51,9 @@ urlpatterns = [
     path('register/', UserRegistrationView.as_view(), name='register'),
     # Create new user account (SRC Chair only)
 
+    path('register-reviewer/', ReviewerPublicRegistrationView.as_view(), name='register-reviewer'),
+    # Public reviewer self-registration (no authentication required)
+
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
     # Change current user's password
 
@@ -55,4 +62,13 @@ urlpatterns = [
 
     path('users/<int:pk>/', UserDetailView.as_view(), name='user-detail'),
     # Get, update, or delete specific user (admin only)
+
+    path('pending-reviewers/', PendingReviewersView.as_view(), name='pending-reviewers'),
+    # List all pending (inactive) reviewer registrations (admin only)
+
+    path('approve-reviewer/<int:pk>/', ApproveReviewerView.as_view(), name='approve-reviewer'),
+    # Approve a pending reviewer registration (admin only)
+
+    path('reject-reviewer/<int:pk>/', RejectReviewerView.as_view(), name='reject-reviewer'),
+    # Reject a pending reviewer registration (admin only)
 ]

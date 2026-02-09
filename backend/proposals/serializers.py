@@ -54,13 +54,12 @@ class ProposalListSerializer(serializers.ModelSerializer):
         ]
     
     def get_pi_display_name(self, obj):
-        return obj.pi.get_full_name() or obj.pi.username
+        return obj.pi_name or 'Unknown'
 
 
 class ProposalSerializer(serializers.ModelSerializer):
     """Full serializer for proposal detail."""
     cycle_name = serializers.CharField(source='cycle.name', read_only=True)
-    pi_username = serializers.CharField(source='pi.username', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     is_revision_overdue = serializers.BooleanField(read_only=True)
     
@@ -73,7 +72,7 @@ class ProposalSerializer(serializers.ModelSerializer):
         model = Proposal
         fields = [
             'id', 'proposal_code', 'title', 'abstract',
-            'pi', 'pi_username', 'pi_name', 'pi_department', 'pi_email',
+            'pi_name', 'pi_department', 'pi_email',
             'co_investigators', 'fund_requested',
             'proposal_file', 'application_template_file',
             'revised_proposal_file', 'response_to_reviewers_file',
@@ -82,7 +81,7 @@ class ProposalSerializer(serializers.ModelSerializer):
             'is_revision_overdue'
         ]
         read_only_fields = [
-            'proposal_code', 'pi', 'status', 'created_at', 'submitted_at', 
+            'proposal_code', 'status', 'created_at', 'submitted_at', 
             'updated_at', 'revision_deadline'
         ]
     
@@ -100,9 +99,6 @@ class ProposalSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            validated_data['pi'] = request.user
         return super().create(validated_data)
 
 

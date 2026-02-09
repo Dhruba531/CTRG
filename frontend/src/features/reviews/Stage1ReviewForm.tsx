@@ -79,22 +79,10 @@ const Stage1ReviewForm: React.FC = () => {
                 });
                 setComments(existing.narrative_comments || '');
             }
-        } catch {
-            // Mock data
-            setAssignment({
-                id: Number(id),
-                proposal: 1,
-                proposal_title: 'AI for Climate Change Prediction',
-                proposal_code: 'CTRG-2025-001',
-                reviewer: 1,
-                reviewer_name: 'Dr. John Smith',
-                reviewer_email: 'smith@nsu.edu',
-                stage: 1,
-                stage_display: 'Stage 1',
-                status: 'ASSIGNED',
-                status_display: 'Assigned',
-                deadline: '2025-02-28',
-            });
+        } catch (err) {
+            console.error("Failed to load assignment", err);
+            setError("Failed to load review assignment. Please try again.");
+            setAssignment(null);
         } finally {
             setLoading(false);
         }

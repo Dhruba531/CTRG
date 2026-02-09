@@ -5,6 +5,7 @@ import ProtectedRoute from './features/auth/ProtectedRoute';
 
 // Eagerly load auth and layout (needed immediately)
 import Login from './features/auth/Login';
+import ReviewerRegistration from './features/auth/ReviewerRegistration';
 import DashboardLayout from './components/DashboardLayout';
 
 // Lazy load feature components for code splitting
@@ -22,7 +23,9 @@ const Stage2ReviewForm = lazy(() => import('./features/reviews/Stage2ReviewForm'
 const SRCChairDashboard = lazy(() => import('./features/admin/SRCChairDashboard'));
 const GrantCycleManagement = lazy(() => import('./features/cycles/GrantCycleManagement'));
 const ReviewerManagement = lazy(() => import('./features/admin/ReviewerManagement'));
+const PendingReviewers = lazy(() => import('./features/admin/PendingReviewers'));
 const ProposalList = lazy(() => import('./features/admin/ProposalList'));
+const ReportsPage = lazy(() => import('./features/admin/ReportsPage'));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -54,6 +57,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register-reviewer" element={<ReviewerRegistration />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           <Route element={<DashboardLayout />}>
@@ -81,7 +85,8 @@ function App() {
               <Route path="/admin/proposals/:id" element={<Suspense fallback={<LoadingFallback />}><ProposalList /></Suspense>} />
               <Route path="/admin/cycles" element={<Suspense fallback={<LoadingFallback />}><GrantCycleManagement /></Suspense>} />
               <Route path="/admin/reviewers" element={<Suspense fallback={<LoadingFallback />}><ReviewerManagement /></Suspense>} />
-              <Route path="/admin/reports" element={<div className="p-6 text-gray-500">Reports - Coming Soon</div>} />
+              <Route path="/admin/pending-reviewers" element={<Suspense fallback={<LoadingFallback />}><PendingReviewers /></Suspense>} />
+              <Route path="/admin/reports" element={<Suspense fallback={<LoadingFallback />}><ReportsPage /></Suspense>} />
             </Route>
           </Route>
 

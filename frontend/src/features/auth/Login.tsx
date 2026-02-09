@@ -5,7 +5,6 @@ import {
     GraduationCap,
     Shield,
     ClipboardCheck,
-    FlaskConical,
     BarChart3,
     Users,
     Mail,
@@ -28,21 +27,29 @@ const Login: React.FC = () => {
     const roleOptions = [
         { value: 'src_chair' as Role, label: 'SRC Chair', icon: Shield },
         { value: 'reviewer' as Role, label: 'Reviewer', icon: ClipboardCheck },
-        { value: 'pi' as Role, label: 'Investigator', icon: FlaskConical },
     ];
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await login(email, password);
+            const response = await login(email, password);
 
-            // Redirect based on role or email
-            if (selectedRole === 'src_chair' || email.includes('admin')) {
+            // Redirect based on actual user role from backend response
+            const userRole = response.role?.toLowerCase();
+
+            if (userRole === 'src_chair' || userRole === 'admin' || response.user.is_staff) {
                 navigate('/admin/dashboard');
-            } else if (selectedRole === 'reviewer' || email.includes('reviewer')) {
+            } else if (userRole === 'reviewer') {
                 navigate('/reviewer/dashboard');
-            } else {
+            } else if (userRole === 'pi') {
                 navigate('/pi/dashboard');
+            } else {
+                // Fallback based on email if role is missing (legacy)
+                if (email.includes('admin')) {
+                    navigate('/admin/dashboard');
+                } else {
+                    navigate('/reviewer/dashboard');
+                }
             }
         } catch (error) {
             alert('Login failed. Please check your credentials.');
@@ -250,6 +257,18 @@ const Login: React.FC = () => {
                                 <p>• pi@nsu.edu</p>
                             </div>
                             <p className="text-xs text-gray-500 mt-2">Password: (any password)</p>
+                        </div>
+
+                        {/* Registration Section */}
+                        <div className="text-center text-sm text-gray-600 py-4 border-t border-gray-200">
+                            <p className="mb-2">Don't have an account?</p>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/register-reviewer')}
+                                className="text-navy hover:text-gold transition-colors font-medium underline"
+                            >
+                                Register as Reviewer
+                            </button>
                         </div>
 
                         {/* Footer */}

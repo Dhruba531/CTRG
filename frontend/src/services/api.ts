@@ -59,6 +59,18 @@ api.interceptors.request.use(
     }
 );
 
+// Auto-unwrap paginated responses: {count, results} -> results array
+api.interceptors.response.use(
+    (response) => {
+        if (response.data && typeof response.data === 'object' &&
+            'results' in response.data && 'count' in response.data) {
+            response.data = response.data.results;
+        }
+        return response;
+    },
+    (error) => Promise.reject(error)
+);
+
 // Global error interceptor with retry logic
 api.interceptors.response.use(
     (response) => response,
@@ -261,6 +273,7 @@ export const cycleApi = {
     update: (id: number, data: Record<string, unknown>) => api.put<GrantCycle>(`/cycles/${id}/`, data),
     delete: (id: number) => api.delete(`/cycles/${id}/`),
     getStatistics: (id: number) => api.get(`/cycles/${id}/statistics/`),
+    getSummaryReport: (id: number) => api.get(`/cycles/${id}/summary_report/`, { responseType: 'blob' }),
 };
 
 // ===== Proposal APIs =====

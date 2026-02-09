@@ -3,7 +3,7 @@
  * Allows SRC Chair to assign reviewers to proposals.
  */
 import React, { useState, useEffect } from 'react';
-import { X, Check, AlertCircle, Users } from 'lucide-react';
+import { X, Check, AlertCircle, Users, Mail } from 'lucide-react';
 import { reviewerApi, assignmentApi, type Proposal, type Reviewer } from '../../services/api';
 
 interface Props {
@@ -20,6 +20,8 @@ const ReviewerAssignmentModal: React.FC<Props> = ({ proposal, onClose, onSuccess
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [assignedIds, setAssignedIds] = useState<number[]>([]);
+    const [notifying, setNotifying] = useState(false);
 
     useEffect(() => {
         loadReviewers();
@@ -39,13 +41,10 @@ const ReviewerAssignmentModal: React.FC<Props> = ({ proposal, onClose, onSuccess
             setLoading(true);
             const response = await reviewerApi.getWorkloads();
             setReviewers(response.data);
+            setError(null);
         } catch (err) {
-            // Mock data
-            setReviewers([
-                { id: 1, user: 1, user_email: 'dr.smith@nsu.edu', user_name: 'Dr. John Smith', area_of_expertise: 'Computer Science, AI', max_review_load: 5, is_active_reviewer: true, current_workload: 3, can_accept_more: true },
-                { id: 2, user: 2, user_email: 'dr.jones@nsu.edu', user_name: 'Dr. Sarah Jones', area_of_expertise: 'Data Science', max_review_load: 4, is_active_reviewer: true, current_workload: 4, can_accept_more: false },
-                { id: 3, user: 3, user_email: 'dr.chen@nsu.edu', user_name: 'Dr. Wei Chen', area_of_expertise: 'Biotechnology', max_review_load: 6, is_active_reviewer: true, current_workload: 2, can_accept_more: true },
-            ]);
+            console.error("Failed to load reviewers", err);
+            setError("Failed to load reviewers. Please try again.");
         } finally {
             setLoading(false);
         }
@@ -68,12 +67,27 @@ const ReviewerAssignmentModal: React.FC<Props> = ({ proposal, onClose, onSuccess
         try {
             setSubmitting(true);
             setError(null);
-            await assignmentApi.assignReviewers(proposal.id, selectedReviewers, stage, deadline);
-            onSuccess();
+            const response = await assignmentApi.assignReviewers(proposal.id, selectedReviewers, stage, deadline);
+            const assigned = response.data?.assigned || [];
+            const newIds = assigned.map((a: any) => a.id);
+            setAssignedIds(newIds);
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to assign reviewers');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleNotifyAll = async () => {
+        try {
+            setNotifying(true);
+            await assignmentApi.bulkNotify(assignedIds);
+            alert(`Notification sent to ${assignedIds.length} reviewer(s).`);
+            onSuccess();
+        } catch (err) {
+            alert('Failed to send notifications.');
+        } finally {
+            setNotifying(false);
         }
     };
 
@@ -209,30 +223,65 @@ const ReviewerAssignmentModal: React.FC<Props> = ({ proposal, onClose, onSuccess
 
                 {/* Footer */}
                 <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end space-x-3">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={submitting || selectedReviewers.length === 0}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                    >
-                        {submitting ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Assigning...
-                            </>
-                        ) : (
-                            <>
-                                <Users size={16} className="mr-2" />
-                                Assign {selectedReviewers.length} Reviewer{selectedReviewers.length !== 1 ? 's' : ''}
-                            </>
-                        )}
-                    </button>
+                    {assignedIds.length > 0 ? (
+                        <>
+                            <span className="text-green-600 text-sm flex items-center mr-auto">
+                                <Check size={16} className="mr-1" />
+                                {assignedIds.length} reviewer(s) assigned successfully
+                            </span>
+                            <button
+                                type="button"
+                                onClick={onSuccess}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                            >
+                                Close
+                            </button>
+                            <button
+                                onClick={handleNotifyAll}
+                                disabled={notifying}
+                                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 flex items-center"
+                            >
+                                {notifying ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Sending...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Mail size={16} className="mr-2" />
+                                        Send Email Notification
+                                    </>
+                                )}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={submitting || selectedReviewers.length === 0}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                            >
+                                {submitting ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Assigning...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Users size={16} className="mr-2" />
+                                        Assign {selectedReviewers.length} Reviewer{selectedReviewers.length !== 1 ? 's' : ''}
+                                    </>
+                                )}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

@@ -27,7 +27,7 @@ class ProposalAdmin(admin.ModelAdmin):
             'fields': ('proposal_code', 'title', 'abstract', 'cycle', 'status')
         }),
         ('PI Information', {
-            'fields': ('pi', 'pi_name', 'pi_department', 'pi_email', 'co_investigators')
+            'fields': ('pi_name', 'pi_department', 'pi_email', 'co_investigators')
         }),
         ('Funding & Files', {
             'fields': ('fund_requested', 'proposal_file', 'application_template_file', 

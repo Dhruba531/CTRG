@@ -3,8 +3,8 @@
  * View all proposals with filtering, search, and actions.
  */
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, UserPlus, CheckSquare, FileText } from 'lucide-react';
-import { proposalApi, type Proposal, cycleApi, type GrantCycle } from '../../services/api';
+import { Search, Filter, Download, Eye, UserPlus, CheckSquare, FileText, Mail, Clock } from 'lucide-react';
+import { proposalApi, assignmentApi, type Proposal, cycleApi, type GrantCycle } from '../../services/api';
 import ReviewerAssignmentModal from './ReviewerAssignmentModal';
 import Stage1DecisionModal from './Stage1DecisionModal';
 import FinalDecisionModal from './FinalDecisionModal';
@@ -64,17 +64,7 @@ const ProposalList: React.FC = () => {
             setProposals(proposalRes.data);
             setCycles(cycleRes.data);
         } catch (err) {
-            // Mock data for demo
-            setProposals([
-                { id: 1, proposal_code: 'CTRG-2025-001', title: 'AI for Climate Change Prediction', pi: 1, pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: 'smith@nsu.edu', fund_requested: 50000, cycle: 1, cycle_name: 'Spring 2025', status: 'UNDER_STAGE_1_REVIEW', status_display: 'Under Stage 1 Review', created_at: '2025-01-15', abstract: '' },
-                { id: 2, proposal_code: 'CTRG-2025-002', title: 'Blockchain in Healthcare Records', pi: 2, pi_name: 'Dr. Sarah Jones', pi_department: 'Information Systems', pi_email: 'jones@nsu.edu', fund_requested: 45000, cycle: 1, cycle_name: 'Spring 2025', status: 'REVISION_REQUESTED', status_display: 'Revision Requested', created_at: '2025-01-16', revision_deadline: '2025-02-15', abstract: '' },
-                { id: 3, proposal_code: 'CTRG-2025-003', title: 'Quantum Computing Applications', pi: 3, pi_name: 'Dr. Wei Chen', pi_department: 'Physics', pi_email: 'chen@nsu.edu', fund_requested: 75000, cycle: 1, cycle_name: 'Spring 2025', status: 'SUBMITTED', status_display: 'Submitted', created_at: '2025-01-20', abstract: '' },
-                { id: 4, proposal_code: 'CTRG-2025-004', title: 'Renewable Energy Grid Optimization', pi: 4, pi_name: 'Dr. Priya Patel', pi_department: 'Electrical Engineering', pi_email: 'patel@nsu.edu', fund_requested: 60000, cycle: 1, cycle_name: 'Spring 2025', status: 'UNDER_STAGE_2_REVIEW', status_display: 'Under Stage 2 Review', created_at: '2025-01-10', abstract: '' },
-                { id: 5, proposal_code: 'CTRG-2025-005', title: 'Machine Learning in Drug Discovery', pi: 5, pi_name: 'Dr. Ahmed Hassan', pi_department: 'Pharmaceutical Sciences', pi_email: 'hassan@nsu.edu', fund_requested: 80000, cycle: 1, cycle_name: 'Spring 2025', status: 'FINAL_ACCEPTED', status_display: 'Final Accepted', created_at: '2025-01-05', abstract: '' },
-            ]);
-            setCycles([
-                { id: 1, name: 'Spring 2025', year: '2024-2025', start_date: '2025-01-15', end_date: '2025-04-30', revision_window_days: 7, acceptance_threshold: 70, max_reviewers_per_proposal: 2, is_active: true },
-            ]);
+            console.error("Failed to load proposals or cycles", err);
         } finally {
             setLoading(false);
         }
@@ -101,7 +91,7 @@ const ProposalList: React.FC = () => {
             link.click();
             link.remove();
         } catch (err) {
-            alert('Report download not available in demo mode');
+            alert('Failed to download report. Please try again.');
         }
     };
 
@@ -111,6 +101,11 @@ const ProposalList: React.FC = () => {
         // Assign reviewers for submitted proposals
         if (['SUBMITTED'].includes(proposal.status)) {
             actions.push({ key: 'assign', label: 'Assign Reviewers', icon: UserPlus, color: 'text-blue-600' });
+        }
+
+        // Notify reviewers for proposals under review
+        if (['UNDER_STAGE_1_REVIEW', 'UNDER_STAGE_2_REVIEW'].includes(proposal.status)) {
+            actions.push({ key: 'notify', label: 'Notify Reviewers', icon: Mail, color: 'text-amber-600' });
         }
 
         // Stage 1 decision for completed Stage 1 reviews
@@ -135,6 +130,38 @@ const ProposalList: React.FC = () => {
         return actions;
     };
 
+    const handleNotifyReviewers = async (proposal: Proposal) => {
+        try {
+            const response = await proposalApi.getReviews(proposal.id);
+            const assignments = response.data;
+            const pendingIds = assignments
+                .filter((a: any) => a.status === 'PENDING')
+                .map((a: any) => a.id);
+
+            if (pendingIds.length === 0) {
+                alert('No pending reviewers to notify.');
+                return;
+            }
+
+            await assignmentApi.bulkNotify(pendingIds);
+            alert(`Notification sent to ${pendingIds.length} reviewer(s).`);
+        } catch (err) {
+            alert('Failed to send notifications. Please try again.');
+        }
+    };
+
+    const getRevisionCountdown = (deadline: string) => {
+        const now = new Date();
+        const dl = new Date(deadline);
+        const diffMs = dl.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) return { text: `${Math.abs(diffDays)}d overdue`, color: 'text-red-600 font-semibold' };
+        if (diffDays === 0) return { text: 'Due today', color: 'text-red-600 font-semibold' };
+        if (diffDays <= 2) return { text: `${diffDays}d left`, color: 'text-orange-600 font-semibold' };
+        return { text: `${diffDays}d left`, color: 'text-orange-500' };
+    };
+
     const handleAction = (action: string, proposal: Proposal) => {
         switch (action) {
             case 'assign':
@@ -146,6 +173,9 @@ const ProposalList: React.FC = () => {
                 break;
             case 'final':
                 setFinalDecisionProposal(proposal);
+                break;
+            case 'notify':
+                handleNotifyReviewers(proposal);
                 break;
             case 'report':
                 handleDownloadReport(proposal);
@@ -261,8 +291,9 @@ const ProposalList: React.FC = () => {
                                             {proposal.status_display || proposal.status}
                                         </span>
                                         {proposal.revision_deadline && (
-                                            <div className="text-xs text-orange-600 mt-1">
-                                                Deadline: {new Date(proposal.revision_deadline).toLocaleDateString()}
+                                            <div className={`text-xs mt-1 flex items-center gap-1 ${getRevisionCountdown(proposal.revision_deadline).color}`}>
+                                                <Clock size={12} />
+                                                {getRevisionCountdown(proposal.revision_deadline).text}
                                             </div>
                                         )}
                                     </td>

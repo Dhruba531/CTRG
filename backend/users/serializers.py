@@ -55,7 +55,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_active']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'is_staff']
         read_only_fields = ['id']
 
     def get_role(self, obj):
@@ -246,6 +246,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
             group = Group.objects.create(name=role)
             user.groups.add(group)
 
+        # Create ReviewerProfile if role is Reviewer
+        if role == 'Reviewer':
+            from reviews.models import ReviewerProfile
+            ReviewerProfile.objects.create(user=user)
+
         return user
 
 
@@ -396,3 +401,122 @@ class UserListSerializer(serializers.ModelSerializer):
         if obj.first_name and obj.last_name:
             return f"{obj.first_name} {obj.last_name}"
         return obj.email
+
+
+class ReviewerRegistrationSerializer(serializers.ModelSerializer):
+    """
+    Public reviewer self-registration serializer.
+
+    This serializer allows reviewers to register themselves without admin approval.
+    Automatically assigns the 'Reviewer' role to the registered user.
+
+    Fields:
+        - username: Unique username (required)
+        - email: Unique email address (required)
+        - password: Password (write-only, validated, required)
+        - first_name: User's first name (required)
+        - last_name: User's last name (required)
+
+    Validation:
+        - Password must meet Django's password validation requirements
+        - Email must be unique
+        - Username must be unique
+
+    Example:
+        {
+            "username": "jane.reviewer",
+            "email": "jane.reviewer@nsu.edu",
+            "password": "SecurePass123!",
+            "first_name": "Jane",
+            "last_name": "Reviewer"
+        }
+    """
+
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password],
+        style={'input_type': 'password'}
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'first_name', 'last_name']
+        extra_kwargs = {
+            'first_name': {'required': True},
+            'last_name': {'required': True},
+        }
+
+    def validate_email(self, value):
+        """
+        Ensure email is unique across all users.
+
+        Args:
+            value (str): Email address to validate
+
+        Returns:
+            str: Validated email address
+
+        Raises:
+            ValidationError: If email already exists
+        """
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def validate_username(self, value):
+        """
+        Ensure username is unique across all users.
+
+        Args:
+            value (str): Username to validate
+
+        Returns:
+            str: Validated username
+
+        Raises:
+            ValidationError: If username already exists
+        """
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value
+
+    def create(self, validated_data):
+        """
+        Create new reviewer user with hashed password and Reviewer role.
+
+        Creates the user with a properly hashed password, assigns the user to
+        the Reviewer group, and creates a ReviewerProfile. The account is
+        created as INACTIVE and requires SRC Chair approval before the
+        reviewer can login.
+
+        Args:
+            validated_data (dict): Validated user data
+
+        Returns:
+            User: Newly created reviewer user instance (inactive)
+        """
+        # Create user with hashed password (inactive by default)
+        user = User.objects.create_user(**validated_data)
+
+        # Set account as inactive - requires SRC Chair approval
+        user.is_active = False
+        user.save()
+
+        # Assign user to Reviewer group
+        try:
+            group = Group.objects.get(name='Reviewer')
+            user.groups.add(group)
+        except Group.DoesNotExist:
+            # If group doesn't exist, create it and assign
+            group = Group.objects.create(name='Reviewer')
+            user.groups.add(group)
+
+        # Create ReviewerProfile for the new reviewer (also inactive)
+        from reviews.models import ReviewerProfile
+        ReviewerProfile.objects.create(
+            user=user,
+            is_active_reviewer=False
+        )
+
+        return user

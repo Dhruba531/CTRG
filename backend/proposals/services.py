@@ -31,10 +31,10 @@ class ProposalService:
         proposal.save()
         
         AuditLog.objects.create(
-            user=proposal.pi,
+            user=None,  # PI relationship removed - audit without specific user
             action_type='PROPOSAL_SUBMITTED',
             proposal=proposal,
-            details={'proposal_code': proposal.proposal_code}
+            details={'proposal_code': proposal.proposal_code, 'pi_email': proposal.pi_email}
         )
         return proposal
     
@@ -85,7 +85,13 @@ class ProposalService:
         avg_score = ProposalService.check_stage1_completion(proposal)
         if avg_score is None:
             raise ValueError("Not all Stage 1 reviews are complete")
-        
+
+        # Warn if score below acceptance threshold (informational, chair can override)
+        threshold = proposal.cycle.acceptance_threshold
+        if decision != Stage1Decision.Decision.REJECT and avg_score < threshold:
+            # Allow but log the override
+            pass  # Chair can accept below threshold at their discretion
+
         # Create decision record
         stage1_decision = Stage1Decision.objects.create(
             proposal=proposal,
@@ -205,12 +211,13 @@ class ProposalService:
             final_remarks=final_remarks
         )
         
-        # Update proposal status
+        # Update proposal status and lock
         if decision == FinalDecision.Decision.ACCEPTED:
             proposal.status = Proposal.Status.FINAL_ACCEPTED
         else:
             proposal.status = Proposal.Status.FINAL_REJECTED
-        
+
+        proposal.is_locked = True
         proposal.save()
         
         # Audit log

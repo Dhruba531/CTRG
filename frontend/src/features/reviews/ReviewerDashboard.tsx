@@ -47,47 +47,10 @@ const ReviewerDashboard: React.FC = () => {
                 completed,
                 overdue
             });
-        } catch {
-            // Mock data for demo
-            const mockData: ReviewAssignment[] = [
-                {
-                    id: 1, proposal: 1, proposal_title: 'AI for Climate Change Prediction', proposal_code: 'CTRG-2025-001',
-                    reviewer: 1, reviewer_name: 'Dr. John Smith', reviewer_email: 'smith@nsu.edu',
-                    stage: 1, stage_display: 'Stage 1', status: 'ASSIGNED', status_display: 'Assigned',
-                    deadline: '2025-02-28'
-                },
-                {
-                    id: 2, proposal: 2, proposal_title: 'Blockchain in Healthcare Records', proposal_code: 'CTRG-2025-002',
-                    reviewer: 1, reviewer_name: 'Dr. John Smith', reviewer_email: 'smith@nsu.edu',
-                    stage: 1, stage_display: 'Stage 1', status: 'IN_PROGRESS', status_display: 'In Progress',
-                    deadline: '2025-02-20'
-                },
-                {
-                    id: 3, proposal: 3, proposal_title: 'Quantum Computing Applications', proposal_code: 'CTRG-2025-003',
-                    reviewer: 1, reviewer_name: 'Dr. John Smith', reviewer_email: 'smith@nsu.edu',
-                    stage: 2, stage_display: 'Stage 2', status: 'ASSIGNED', status_display: 'Assigned',
-                    deadline: '2025-03-15'
-                },
-                {
-                    id: 4, proposal: 4, proposal_title: 'Renewable Energy Grid Optimization', proposal_code: 'CTRG-2025-004',
-                    reviewer: 1, reviewer_name: 'Dr. John Smith', reviewer_email: 'smith@nsu.edu',
-                    stage: 1, stage_display: 'Stage 1', status: 'COMPLETED', status_display: 'Completed',
-                    deadline: '2025-02-15',
-                    stage1_score: {
-                        id: 1, originality_score: 12, clarity_score: 13, literature_review_score: 11,
-                        methodology_score: 14, impact_score: 12, publication_potential_score: 8,
-                        budget_appropriateness_score: 9, timeline_practicality_score: 4,
-                        narrative_comments: 'Good proposal with strong methodology.', total_score: 83, percentage_score: 83
-                    }
-                },
-            ];
-            setAssignments(mockData);
-            setStats({
-                total_assignments: 4,
-                pending: 3,
-                completed: 1,
-                overdue: 0
-            });
+        } catch (err) {
+            console.error("Failed to load reviewer assignments", err);
+            setAssignments([]);
+            setStats({ total_assignments: 0, pending: 0, completed: 0, overdue: 0 });
         } finally {
             setLoading(false);
         }

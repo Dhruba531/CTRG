@@ -29,36 +29,10 @@ const Stage1DecisionModal: React.FC<Props> = ({ proposal, onClose, onSuccess }) 
             setLoading(true);
             const response = await proposalApi.getReviews(proposal.id);
             setReviews(response.data);
+            setError(null);
         } catch (err) {
-            // Mock data
-            setReviews([
-                {
-                    id: 1, proposal: proposal.id, proposal_title: proposal.title, proposal_code: proposal.proposal_code,
-                    reviewer: 1, reviewer_name: 'Dr. John Smith', reviewer_email: 'smith@nsu.edu',
-                    stage: 1, stage_display: 'Stage 1', status: 'COMPLETED', status_display: 'Completed',
-                    deadline: '2025-02-28',
-                    stage1_score: {
-                        id: 1, originality_score: 12, clarity_score: 13, literature_review_score: 11,
-                        methodology_score: 14, impact_score: 12, publication_potential_score: 8,
-                        budget_appropriateness_score: 9, timeline_practicality_score: 4,
-                        narrative_comments: 'Strong methodology and clear objectives. Budget could be more detailed.',
-                        total_score: 83, percentage_score: 83
-                    }
-                },
-                {
-                    id: 2, proposal: proposal.id, proposal_title: proposal.title, proposal_code: proposal.proposal_code,
-                    reviewer: 2, reviewer_name: 'Dr. Wei Chen', reviewer_email: 'chen@nsu.edu',
-                    stage: 1, stage_display: 'Stage 1', status: 'COMPLETED', status_display: 'Completed',
-                    deadline: '2025-02-28',
-                    stage1_score: {
-                        id: 2, originality_score: 14, clarity_score: 12, literature_review_score: 13,
-                        methodology_score: 13, impact_score: 14, publication_potential_score: 9,
-                        budget_appropriateness_score: 7, timeline_practicality_score: 4,
-                        narrative_comments: 'Excellent potential impact. Timeline seems ambitious but achievable.',
-                        total_score: 86, percentage_score: 86
-                    }
-                }
-            ]);
+            console.error("Failed to load reviews", err);
+            setError("Failed to load reviews. Please try again.");
         } finally {
             setLoading(false);
         }

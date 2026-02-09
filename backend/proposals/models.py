@@ -71,8 +71,7 @@ class Proposal(models.Model):
     title = models.CharField(max_length=255)
     abstract = models.TextField()
     
-    # PI Information
-    pi = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='proposals')
+    # PI Information (stored as text fields only - no user account required)
     pi_name = models.CharField(max_length=255, help_text="Principal Investigator name")
     pi_department = models.CharField(max_length=255)
     pi_email = models.EmailField()
@@ -98,6 +97,7 @@ class Proposal(models.Model):
     submitted_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     revision_deadline = models.DateTimeField(null=True, blank=True)
+    is_locked = models.BooleanField(default=False, help_text="Locked after final decision")
 
     class Meta:
         ordering = ['-created_at']
@@ -111,7 +111,12 @@ class Proposal(models.Model):
         """Auto-generate proposal code if not set"""
         if not self.proposal_code:
             # Generate code like CTRG-2025-001
-            cycle_year = self.cycle.year.split('-')[0] if self.cycle else timezone.now().year
+            if self.cycle:
+                # Handle both string ('2025' or '2025-2026') and integer (2025) year formats
+                year_str = str(self.cycle.year)
+                cycle_year = year_str.split('-')[0] if '-' in year_str else year_str
+            else:
+                cycle_year = str(timezone.now().year)
             # Count existing proposals in this cycle
             count = Proposal.objects.filter(cycle=self.cycle).count() + 1
             self.proposal_code = f"CTRG-{cycle_year}-{count:03d}"

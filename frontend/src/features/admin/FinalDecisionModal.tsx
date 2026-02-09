@@ -30,30 +30,10 @@ const FinalDecisionModal: React.FC<Props> = ({ proposal, onClose, onSuccess }) =
             setLoading(true);
             const response = await proposalApi.getReviews(proposal.id);
             setReviews(response.data);
+            setError(null);
         } catch (err) {
-            // Mock data
-            setReviews([
-                {
-                    id: 3, proposal: proposal.id, proposal_title: proposal.title, proposal_code: proposal.proposal_code,
-                    reviewer: 1, reviewer_name: 'Dr. John Smith', reviewer_email: 'smith@nsu.edu',
-                    stage: 2, stage_display: 'Stage 2', status: 'COMPLETED', status_display: 'Completed',
-                    deadline: '2025-04-15',
-                    stage2_review: {
-                        id: 1, concerns_addressed: 'YES', revised_recommendation: 'ACCEPT',
-                        revised_score: 88, comments: 'All major concerns were addressed. The revised methodology is much stronger.'
-                    }
-                },
-                {
-                    id: 4, proposal: proposal.id, proposal_title: proposal.title, proposal_code: proposal.proposal_code,
-                    reviewer: 3, reviewer_name: 'Dr. Wei Chen', reviewer_email: 'chen@nsu.edu',
-                    stage: 2, stage_display: 'Stage 2', status: 'COMPLETED', status_display: 'Completed',
-                    deadline: '2025-04-15',
-                    stage2_review: {
-                        id: 2, concerns_addressed: 'PARTIALLY', revised_recommendation: 'ACCEPT',
-                        revised_score: 82, comments: 'Budget justification improved but timeline still seems tight. Overall acceptable.'
-                    }
-                }
-            ]);
+            console.error("Failed to load reviews", err);
+            setError("Failed to load reviews. Please try again.");
         } finally {
             setLoading(false);
         }

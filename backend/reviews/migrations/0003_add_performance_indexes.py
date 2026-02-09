@@ -29,6 +29,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='reviewassignment',
-            index=models.Index(fields=['-assigned_at'], name='review_assigned_desc_idx'),
+            index=models.Index(fields=['-assigned_date'], name='review_assigned_desc_idx'),
         ),
     ]

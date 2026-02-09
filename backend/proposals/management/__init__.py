@@ -1,1 +1,1 @@
-# Management package for custom Django commands
+# This file makes the directory a Python package

@@ -70,6 +70,19 @@ class GrantCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(cycles, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAdminUser])
+    def summary_report(self, request, pk=None):
+        """Download cycle summary report as PDF."""
+        from .reporting import generate_summary_report
+        from django.http import HttpResponse
+
+        cycle = self.get_object()
+        pdf_buffer = generate_summary_report(cycle)
+
+        response = HttpResponse(pdf_buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="cycle_summary_{cycle.year}.pdf"'
+        return response
+
 
 class ProposalViewSet(viewsets.ModelViewSet):
     """
@@ -96,10 +109,9 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
         # Base queryset with optimizations
         base_queryset = Proposal.objects.select_related(
-            'pi',           # ForeignKey to User
             'cycle'         # ForeignKey to GrantCycle
         ).prefetch_related(
-            'reviews',      # Reverse FK to ReviewAssignments
+            'review_assignments',  # Reverse FK to ReviewAssignments
             'stage1_decision',  # Reverse FK to Stage1Decision
             'final_decision'    # Reverse FK to FinalDecision
         )
@@ -114,14 +126,14 @@ class ProposalViewSet(viewsets.ModelViewSet):
             reviewer=user
         ).values_list('proposal_id', flat=True)
 
-        # Return own proposals + assigned proposals
+        # Return assigned proposals for reviewers
         return base_queryset.filter(
-            Q(pi=user) | Q(id__in=reviewer_proposal_ids)
+            Q(id__in=reviewer_proposal_ids)
         ).distinct()
     
     def perform_create(self, serializer):
-        """Automatically set the PI to the current user when creating a proposal."""
-        proposal = serializer.save(pi=self.request.user)
+        """Create a proposal with auto-filled PI info from user."""
+        proposal = serializer.save()
         # Set PI information from user profile if not provided
         if not proposal.pi_name:
             proposal.pi_name = self.request.user.get_full_name() or self.request.user.username
@@ -131,8 +143,8 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def my_proposals(self, request):
-        """Get all proposals for the current user (PI)."""
-        proposals = Proposal.objects.filter(pi=request.user)
+        """Get all proposals with PI email matching current user."""
+        proposals = Proposal.objects.filter(pi_email=request.user.email)
         serializer = ProposalListSerializer(proposals, many=True)
         return Response(serializer.data)
 
@@ -315,7 +327,7 @@ class DashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def pi(self, request):
         """PI dashboard statistics."""
-        proposals = Proposal.objects.filter(pi=request.user)
+        proposals = Proposal.objects.filter(pi_email=request.user.email)
         
         # Find proposals with upcoming revision deadlines
         from datetime import timedelta

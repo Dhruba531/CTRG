@@ -7,7 +7,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import {
     LayoutDashboard, FileText, CheckSquare, LogOut,
-    Calendar, Users, BarChart3, ChevronLeft, Menu, GraduationCap, Plus
+    Calendar, Users, BarChart3, ChevronLeft, Menu, GraduationCap, Plus, UserCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -32,6 +32,7 @@ const adminNavItems: NavItem[] = [
     { to: '/admin/proposals', icon: FileText, label: 'Proposals' },
     { to: '/admin/cycles', icon: Calendar, label: 'Grant Cycles' },
     { to: '/admin/reviewers', icon: Users, label: 'Reviewers' },
+    { to: '/admin/pending-reviewers', icon: UserCheck, label: 'Pending Reviewers' },
     { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
 ];
 

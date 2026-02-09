@@ -23,6 +23,7 @@ const PIDashboard: React.FC = () => {
     const [proposals, setProposals] = useState<Proposal[]>([]);
     const [stats, setStats] = useState<PIStats>({ total: 0, drafts: 0, under_review: 0, pending_action: 0, completed: 0 });
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         loadProposals();
@@ -47,36 +48,11 @@ const PIDashboard: React.FC = () => {
             ).length;
 
             setStats({ total: response.data.length, drafts, under_review: underReview, pending_action: pendingAction, completed });
-        } catch {
-            // Mock data
-            const mockData: Proposal[] = [
-                {
-                    id: 1, proposal_code: 'CTRG-2025-001', title: 'AI for Climate Change Prediction',
-                    pi: 1, pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: 'smith@nsu.edu',
-                    fund_requested: 50000, cycle: 1, cycle_name: 'Spring 2025', status: 'UNDER_STAGE_1_REVIEW',
-                    status_display: 'Under Stage 1 Review', created_at: '2025-02-01', abstract: ''
-                },
-                {
-                    id: 2, proposal_code: 'CTRG-2025-005', title: 'Machine Learning in Drug Discovery',
-                    pi: 1, pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: 'smith@nsu.edu',
-                    fund_requested: 75000, cycle: 1, cycle_name: 'Spring 2025', status: 'REVISION_REQUESTED',
-                    status_display: 'Revision Requested', created_at: '2025-01-15', revision_deadline: '2025-02-28', abstract: ''
-                },
-                {
-                    id: 3, proposal_code: '', title: 'Quantum Computing Applications',
-                    pi: 1, pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: 'smith@nsu.edu',
-                    fund_requested: 60000, cycle: 1, cycle_name: 'Spring 2025', status: 'DRAFT',
-                    status_display: 'Draft', created_at: '2025-02-05', abstract: ''
-                },
-                {
-                    id: 4, proposal_code: 'CTRG-2024-012', title: 'Blockchain in Healthcare Records',
-                    pi: 1, pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: 'smith@nsu.edu',
-                    fund_requested: 45000, cycle: 2, cycle_name: 'Fall 2024', status: 'FINAL_ACCEPTED',
-                    status_display: 'Funded', created_at: '2024-08-01', approved_amount: 42000, abstract: ''
-                },
-            ];
-            setProposals(mockData);
-            setStats({ total: 4, drafts: 1, under_review: 1, pending_action: 1, completed: 1 });
+        } catch (err) {
+            console.error("Failed to load proposals:", err);
+            setError("Failed to load proposals. Please try again.");
+            setProposals([]); // Clear proposals on error
+            setStats({ total: 0, drafts: 0, under_review: 0, pending_action: 0, completed: 0 }); // Reset stats on error
         } finally {
             setLoading(false);
         }
@@ -162,6 +138,12 @@ const PIDashboard: React.FC = () => {
                     New Proposal
                 </Link>
             </div>
+
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p>{error}</p>
+                </div>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

@@ -1,26 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download, Clock, Filter, Search } from 'lucide-react';
-
-const MOCK_ALL_PROPOSALS = [
-    { id: 1, title: 'AI for Climate Change', pi: 'Dr. Smith', cycle: 'Spring 2024', status: 'UNDER_REVIEW_STAGE_1' },
-    { id: 2, title: 'Blockchain in Education', pi: 'Dr. Jones', cycle: 'Spring 2024', status: 'DRAFT' },
-    { id: 3, title: 'Quantum Algo', pi: 'Dr. Doe', cycle: 'Spring 2024', status: 'STAGE_1_COMPLETED' },
-    { id: 4, title: 'Bio-Informatics Study', pi: 'Dr. Alice', cycle: 'Spring 2024', status: 'REVISION_REQUESTED' },
-];
+import { dashboardApi, proposalApi, type Proposal } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const AdminDashboard: React.FC = () => {
+    const navigate = useNavigate();
+    const [stats, setStats] = useState({
+        total_proposals: 0,
+        pending_reviews: 0,
+        awaiting_decision: 0,
+        awaiting_revision: 0
+    });
+    const [proposals, setProposals] = useState<Proposal[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('ALL');
 
-    const filteredProposals = MOCK_ALL_PROPOSALS.filter(p => {
-        const matchesSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) || p.pi.toLowerCase().includes(searchTerm.toLowerCase());
+    useEffect(() => {
+        loadDashboardData();
+    }, []);
+
+    const loadDashboardData = async () => {
+        try {
+            setLoading(true);
+            const [statsRes, proposalsRes] = await Promise.all([
+                dashboardApi.getSrcChairStats(),
+                proposalApi.getAll()
+            ]);
+
+            setStats({
+                total_proposals: statsRes.data.total_proposals,
+                pending_reviews: statsRes.data.pending_reviews,
+                awaiting_decision: statsRes.data.awaiting_decision,
+                awaiting_revision: statsRes.data.awaiting_revision,
+            });
+            setProposals(proposalsRes.data);
+            setError(null);
+        } catch (err) {
+            console.error("Failed to load admin dashboard", err);
+            setError("Failed to load dashboard data. Please check your connection.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filteredProposals = proposals.filter(p => {
+        const matchesSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.pi_name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter = filterStatus === 'ALL' || p.status === filterStatus;
         return matchesSearch && matchesFilter;
     });
 
     const handleRunTimer = () => {
-        alert('Triggered Check Deadline Task');
+        // Placeholder for future implementation
+        alert('Deadline check triggered (Background Task)');
     };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -31,29 +74,38 @@ const AdminDashboard: React.FC = () => {
                         <Clock size={16} className="mr-2" />
                         Run Deadline Check
                     </button>
-                    <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    <button
+                        onClick={() => navigate('/admin/cycles')}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
                         + New Grant Cycle
                     </button>
                 </div>
             </div>
 
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p>{error}</p>
+                </div>
+            )}
+
             {/* Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                     <p className="text-sm font-medium text-gray-500">Total Proposals</p>
-                    <p className="text-2xl font-bold text-gray-900">{MOCK_ALL_PROPOSALS.length}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.total_proposals}</p>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                     <p className="text-sm font-medium text-gray-500">Pending Review</p>
-                    <p className="text-2xl font-bold text-blue-600">1</p>
+                    <p className="text-2xl font-bold text-blue-600">{stats.pending_reviews}</p>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                    <p className="text-sm font-medium text-gray-500">Awaiting Decision</p>
+                    <p className="text-2xl font-bold text-purple-600">{stats.awaiting_decision}</p>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                     <p className="text-sm font-medium text-gray-500">Revision Requested</p>
-                    <p className="text-2xl font-bold text-yellow-600">1</p>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                    <p className="text-sm font-medium text-gray-500">Funded</p>
-                    <p className="text-2xl font-bold text-green-600">0</p>
+                    <p className="text-2xl font-bold text-yellow-600">{stats.awaiting_revision}</p>
                 </div>
             </div>
 
@@ -81,8 +133,12 @@ const AdminDashboard: React.FC = () => {
                     >
                         <option value="ALL">All Statuses</option>
                         <option value="DRAFT">Draft</option>
-                        <option value="UNDER_REVIEW_STAGE_1">Review Stage 1</option>
-                        <option value="REVISION_REQUESTED">Revision</option>
+                        <option value="SUBMITTED">Submitted</option>
+                        <option value="UNDER_STAGE_1_REVIEW">Review Stage 1</option>
+                        <option value="REVISION_REQUESTED">Revision Requested</option>
+                        <option value="REVISED_PROPOSAL_SUBMITTED">Revised Submitted</option>
+                        <option value="UNDER_STAGE_2_REVIEW">Review Stage 2</option>
+                        <option value="FINAL_ACCEPTED">Funded</option>
                     </select>
                 </div>
             </div>
@@ -101,21 +157,28 @@ const AdminDashboard: React.FC = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {filteredProposals.map((proposal) => (
-                            <tr key={proposal.id}>
+                            <tr key={proposal.id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proposal.title}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proposal.pi}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proposal.cycle}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proposal.pi_name}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proposal.cycle_name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${proposal.status === 'REVISION_REQUESTED' ? 'bg-red-100 text-red-800' :
-                                            proposal.status === 'STAGE_1_COMPLETED' ? 'bg-purple-100 text-purple-800' :
-                                                'bg-blue-100 text-blue-800'
+                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                        ${proposal.status === 'REVISION_REQUESTED' ? 'bg-orange-100 text-orange-800' :
+                                            proposal.status === 'FINAL_ACCEPTED' ? 'bg-green-100 text-green-800' :
+                                                proposal.status === 'STAGE_1_REJECTED' || proposal.status === 'FINAL_REJECTED' ? 'bg-red-100 text-red-800' :
+                                                    'bg-blue-100 text-blue-800'
                                         }`}>
-                                        {proposal.status}
+                                        {proposal.status_display || proposal.status.replace(/_/g, ' ')}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button className="text-gray-400 hover:text-gray-600 mr-4">Edit</button>
-                                    <button className="text-blue-600 hover:text-blue-900 inline-flex items-center">
+                                    <button
+                                        onClick={() => navigate(`/admin/proposals/${proposal.id}`)}
+                                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                                    >
+                                        View
+                                    </button>
+                                    <button className="text-gray-400 hover:text-gray-600 inline-flex items-center">
                                         <Download size={14} className="mr-1" /> Report
                                     </button>
                                 </td>
@@ -124,6 +187,13 @@ const AdminDashboard: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+
+            {filteredProposals.length === 0 && (
+                <div className="text-center py-12 bg-white rounded-lg shadow">
+                    <div className="text-gray-400 mb-2">No proposals found</div>
+                    <div className="text-sm text-gray-500">Try adjusting your filters or search terms</div>
+                </div>
+            )}
         </div>
     );
 };

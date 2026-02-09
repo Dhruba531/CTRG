@@ -28,7 +28,8 @@ from .serializers import (
     LoginSerializer,
     UserCreateSerializer,
     ChangePasswordSerializer,
-    UserListSerializer
+    UserListSerializer,
+    ReviewerRegistrationSerializer
 )
 
 # Get the custom User model
@@ -418,3 +419,248 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     queryset = User.objects.all()
     lookup_field = 'pk'
+
+
+class ReviewerPublicRegistrationView(generics.CreateAPIView):
+    """
+    Public reviewer self-registration endpoint.
+
+    POST /api/auth/register-reviewer/
+
+    Allows reviewers to register themselves without admin approval.
+    Automatically assigns the 'Reviewer' role to the registered user.
+
+    Request Body:
+        {
+            "username": "jane.reviewer",
+            "email": "jane.reviewer@nsu.edu",
+            "password": "SecurePass123!",
+            "first_name": "Jane",
+            "last_name": "Reviewer"
+        }
+
+    Success Response (201 Created):
+        {
+            "id": 5,
+            "username": "jane.reviewer",
+            "email": "jane.reviewer@nsu.edu",
+            "first_name": "Jane",
+            "last_name": "Reviewer",
+            "role": "Reviewer",
+            "is_active": true
+        }
+
+    Error Responses:
+        - 400 Bad Request: Invalid data, duplicate email/username, weak password
+
+    Authentication: Not required (public endpoint)
+    """
+
+    serializer_class = ReviewerRegistrationSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def perform_create(self, serializer):
+        """
+        Create reviewer user and log the registration action.
+
+        Args:
+            serializer: Validated ReviewerRegistrationSerializer
+        """
+        user = serializer.save()
+
+
+class PendingReviewersView(generics.ListAPIView):
+    """
+    List all pending (inactive) reviewer registrations (Admin only).
+
+    GET /api/auth/pending-reviewers/
+
+    Returns a list of all pending reviewer accounts awaiting SRC Chair approval.
+    Used by admin dashboard to review and approve new reviewer registrations.
+
+    Success Response (200 OK):
+        [
+            {
+                "id": 1,
+                "username": "john.reviewer",
+                "email": "john.reviewer@nsu.edu",
+                "full_name": "John Reviewer",
+                "role": "Reviewer",
+                "is_active": false,
+                "date_joined": "2024-02-09T10:00:00Z"
+            }
+        ]
+
+    Error Responses:
+        - 401 Unauthorized: Not authenticated
+        - 403 Forbidden: Not an admin user
+
+    Authentication: Required (Token)
+    Permissions: Admin users only (is_staff=True)
+    """
+
+    serializer_class = UserListSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def get_queryset(self):
+        """
+        Get all pending (inactive) reviewers.
+
+        Returns:
+            QuerySet: Inactive users in the Reviewer group
+        """
+        return User.objects.filter(
+            groups__name='Reviewer',
+            is_active=False
+        ).order_by('-date_joined')
+
+
+class ApproveReviewerView(APIView):
+    """
+    Approve a pending reviewer registration (Admin only).
+
+    POST /api/auth/approve-reviewer/<id>/
+
+    Activates a pending reviewer account, allowing them to login.
+
+    Success Response (200 OK):
+        {
+            "message": "Reviewer approved successfully.",
+            "user": {
+                "id": 1,
+                "username": "john.reviewer",
+                "email": "john.reviewer@nsu.edu",
+                "is_active": true
+            }
+        }
+
+    Error Responses:
+        - 400 Bad Request: User is already active
+        - 401 Unauthorized: Not authenticated
+        - 403 Forbidden: Not an admin user
+        - 404 Not Found: User does not exist
+
+    Authentication: Required (Token)
+    Permissions: Admin users only (is_staff=True)
+    """
+
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def post(self, request, pk):
+        """
+        Approve pending reviewer and activate their account.
+
+        Args:
+            request: HTTP request
+            pk: User ID
+
+        Returns:
+            Response: Success message and user data
+        """
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if user is in Reviewer group
+        if not user.groups.filter(name='Reviewer').exists():
+            return Response(
+                {'error': 'User is not a reviewer.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if already active
+        if user.is_active:
+            return Response(
+                {'error': 'Reviewer is already approved.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Activate user account
+        user.is_active = True
+        user.save()
+
+        # Activate reviewer profile
+        try:
+            from reviews.models import ReviewerProfile
+            reviewer_profile = ReviewerProfile.objects.get(user=user)
+            reviewer_profile.is_active_reviewer = True
+            reviewer_profile.save()
+        except:
+            pass  # Profile might not exist
+
+        serializer = UserSerializer(user)
+        return Response({
+            'message': 'Reviewer approved successfully.',
+            'user': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class RejectReviewerView(APIView):
+    """
+    Reject a pending reviewer registration (Admin only).
+
+    DELETE /api/auth/reject-reviewer/<id>/
+
+    Deletes a pending reviewer account, rejecting their registration.
+
+    Success Response (200 OK):
+        {
+            "message": "Reviewer registration rejected."
+        }
+
+    Error Responses:
+        - 400 Bad Request: Cannot reject active reviewer
+        - 401 Unauthorized: Not authenticated
+        - 403 Forbidden: Not an admin user
+        - 404 Not Found: User does not exist
+
+    Authentication: Required (Token)
+    Permissions: Admin users only (is_staff=True)
+    """
+
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def delete(self, request, pk):
+        """
+        Reject pending reviewer registration by deleting the account.
+
+        Args:
+            request: HTTP request
+            pk: User ID
+
+        Returns:
+            Response: Success message
+        """
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if user is in Reviewer group
+        if not user.groups.filter(name='Reviewer').exists():
+            return Response(
+                {'error': 'User is not a reviewer.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent deletion of active reviewers (safety check)
+        if user.is_active:
+            return Response(
+                {'error': 'Cannot reject an active reviewer. Use the deactivate endpoint instead.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Delete the user account
+        user.delete()
+
+        return Response(
+            {'message': 'Reviewer registration rejected.'},
+            status=status.HTTP_200_OK
+        )

@@ -58,34 +58,10 @@ const Stage2ReviewForm: React.FC = () => {
                 setTechnicalComments(response.data.stage2_review.technical_comments || '');
                 setBudgetComments(response.data.stage2_review.budget_comments || '');
             }
-        } catch {
-            // Mock data
-            setAssignment({
-                id: Number(id),
-                proposal: 2,
-                proposal_title: 'Blockchain in Healthcare Records - Revised',
-                proposal_code: 'CTRG-2025-002',
-                reviewer: 1,
-                reviewer_name: 'Dr. John Smith',
-                reviewer_email: 'smith@nsu.edu',
-                stage: 2,
-                stage_display: 'Stage 2',
-                status: 'ASSIGNED',
-                status_display: 'Assigned',
-                deadline: '2025-03-15',
-            });
-            setStage1Summary({
-                originality_score: 12,
-                clarity_score: 11,
-                literature_review_score: 10,
-                methodology_score: 9,
-                impact_score: 13,
-                publication_potential_score: 7,
-                budget_appropriateness_score: 6,
-                timeline_practicality_score: 3,
-                total_score: 71,
-                narrative_comments: 'The proposal shows promise but needs significant improvements in methodology section and budget justification. The timeline is ambitious and may need adjustment.',
-            });
+        } catch (err) {
+            console.error("Failed to load assignment", err);
+            setError("Failed to load review assignment. Please try again.");
+            setAssignment(null);
         } finally {
             setLoading(false);
         }
