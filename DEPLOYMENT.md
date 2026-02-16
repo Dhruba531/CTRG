@@ -40,8 +40,7 @@ Before starting, ensure you have the following installed:
   - Linux: `sudo apt-get install redis-server`
   - Windows: https://redis.io/docs/getting-started/installation/install-redis-on-windows/
 
-- **PostgreSQL** (recommended for production)
-  - Not required for local development (uses SQLite)
+- **PostgreSQL** (default database, required)
   - Download: https://www.postgresql.org/download/
 
 ---
@@ -254,17 +253,9 @@ DEFAULT_FROM_EMAIL=CTRG Grant System <your-email@gmail.com>
 
 ### Database Configuration
 
-**Development (SQLite - Default):**
+**PostgreSQL (Default for local and production):**
 
-Already configured in `.env`:
-```env
-DATABASE_ENGINE=django.db.backends.sqlite3
-DATABASE_NAME=db.sqlite3
-```
-
-**Production (PostgreSQL - Recommended):**
-
-Update `.env`:
+Set in `.env`:
 ```env
 DATABASE_ENGINE=django.db.backends.postgresql
 DATABASE_NAME=ctrg_grant_db
@@ -272,6 +263,12 @@ DATABASE_USER=ctrg_user
 DATABASE_PASSWORD=your_secure_password
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
+```
+
+**Optional SQLite fallback (explicit only):**
+```env
+DATABASE_ENGINE=django.db.backends.sqlite3
+DATABASE_NAME=db.sqlite3
 ```
 
 Then install PostgreSQL driver:
@@ -716,7 +713,7 @@ celery -A config beat -l info     # Start scheduler
 - **Backend Code**: `backend/`
 - **Frontend Code**: `frontend/src/`
 - **Environment Config**: `backend/.env`
-- **Database**: `backend/db.sqlite3`
+- **Database**: PostgreSQL database defined in `backend/.env` (default: `ctrg_grant_db`)
 - **Uploaded Files**: `backend/media/`
 - **Logs**: `backend/logs/django.log`
 

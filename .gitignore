@@ -60,5 +60,8 @@ htmlcov/
 *.tmp
 .cache/
 
+# Local database migration backups
+backend/data_sqlite_backup.json
+
 # Runtime PID files
 *.pid

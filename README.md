@@ -43,7 +43,7 @@ A comprehensive web-based platform for managing research grant proposals with a 
 - **Django REST Framework** - RESTful API
 - **Token Authentication** - Secure API access
 - **Celery + Redis** - Background task processing
-- **SQLite** - Development database (PostgreSQL recommended for production)
+- **PostgreSQL** - Primary database (SQLite optional fallback)
 - **ReportLab** - PDF generation
 
 ### Frontend
@@ -62,6 +62,7 @@ A comprehensive web-based platform for managing research grant proposals with a 
 - **Python 3.9+** (Python 3.11 recommended)
 - **Node.js 18+** and npm
 - **Git** (for cloning the repository)
+- **PostgreSQL 17+**
 - **Redis** (optional, for background tasks)
 
 ### 1. Clone the Repository
@@ -401,7 +402,9 @@ reviewer.groups.add(Group.objects.get(name='Reviewer'))
 - Run `pip install django-environ`
 
 **Database errors**
-- Delete `db.sqlite3` and run `python manage.py migrate` again
+- Ensure PostgreSQL service is running and `.env` database settings are correct
+- Run `python manage.py migrate`
+- If you explicitly use SQLite fallback, delete `db.sqlite3` and migrate again
 
 ### Frontend won't start
 
@@ -434,7 +437,7 @@ reviewer.groups.add(Group.objects.get(name='Reviewer'))
 For production deployment:
 
 1. **Set `DEBUG=False` in `.env`**
-2. **Use PostgreSQL** instead of SQLite
+2. **Use PostgreSQL (default)** with managed backups
 3. **Set strong `SECRET_KEY`**
 4. **Configure proper email service** (SendGrid recommended)
 5. **Use Gunicorn** for WSGI server

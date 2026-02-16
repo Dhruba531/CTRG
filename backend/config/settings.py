@@ -34,8 +34,12 @@ env = environ.Env(
     DEBUG=(bool, False),
     ALLOWED_HOSTS=(list, []),
     SECRET_KEY=(str, 'django-insecure-default-key-please-change'),
-    DATABASE_ENGINE=(str, 'django.db.backends.sqlite3'),
-    DATABASE_NAME=(str, 'db.sqlite3'),
+    DATABASE_ENGINE=(str, 'django.db.backends.postgresql'),
+    DATABASE_NAME=(str, 'ctrg_grant_db'),
+    DATABASE_USER=(str, ''),
+    DATABASE_PASSWORD=(str, ''),
+    DATABASE_HOST=(str, 'localhost'),
+    DATABASE_PORT=(str, '5432'),
     EMAIL_BACKEND=(str, 'django.core.mail.backends.console.EmailBackend'),
     CORS_ALLOW_CREDENTIALS=(bool, True),
 )
@@ -123,7 +127,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ========================================
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# SQLite for development (default)
+# PostgreSQL is the default/original database (production-first setup).
+# SQLite is only used if explicitly configured.
 if env('DATABASE_ENGINE') == 'django.db.backends.sqlite3':
     DATABASES = {
         'default': {
@@ -131,16 +136,16 @@ if env('DATABASE_ENGINE') == 'django.db.backends.sqlite3':
             'NAME': BASE_DIR / env('DATABASE_NAME'),
         }
     }
-# PostgreSQL for production with connection pooling
+# PostgreSQL with connection pooling
 else:
     DATABASES = {
         'default': {
             'ENGINE': env('DATABASE_ENGINE'),
             'NAME': env('DATABASE_NAME'),
-            'USER': env('DATABASE_USER', default=''),
-            'PASSWORD': env('DATABASE_PASSWORD', default=''),
-            'HOST': env('DATABASE_HOST', default='localhost'),
-            'PORT': env('DATABASE_PORT', default='5432'),
+            'USER': env('DATABASE_USER'),
+            'PASSWORD': env('DATABASE_PASSWORD'),
+            'HOST': env('DATABASE_HOST'),
+            'PORT': env('DATABASE_PORT'),
             # Connection pooling for better performance
             'CONN_MAX_AGE': 600,  # Keep connections alive for 10 minutes
             'OPTIONS': {
