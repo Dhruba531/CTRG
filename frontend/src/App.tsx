@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { AuthProvider } from './features/auth/AuthContext';
 import ProtectedRoute from './features/auth/ProtectedRoute';
@@ -29,25 +29,47 @@ const ReportsPage = lazy(() => import('./features/admin/ReportsPage'));
 
 // Loading fallback component
 const LoadingFallback = () => (
-  <div className="flex items-center justify-center min-h-screen">
-    <div className="flex flex-col items-center gap-3">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      <p className="text-gray-600 text-sm">Loading...</p>
+  <div className="app-background flex min-h-screen items-center justify-center px-4">
+    <div className="surface-glass flex w-full max-w-sm flex-col items-center gap-3 rounded-3xl border border-slate-200 p-8 text-center shadow-[0_20px_38px_rgba(15,23,42,0.14)]">
+      <div className="relative">
+        <div className="h-14 w-14 animate-spin rounded-full border-4 border-[#d7dfec] border-t-[#1e2a4a]" />
+        <div className="absolute inset-2 rounded-full bg-[linear-gradient(140deg,#d4a017_0%,#f2cb6b_100%)] opacity-50" />
+      </div>
+      <p className="text-sm font-semibold text-slate-700">Loading workspace</p>
+      <p className="text-xs text-slate-500">Preparing your CTRG dashboard...</p>
     </div>
   </div>
 );
 
 const GenericNotFound = () => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-    <h1 className="text-6xl font-bold text-gray-300">404</h1>
-    <p className="text-xl text-gray-500 mt-4">Page Not Found</p>
+  <div className="app-background flex min-h-screen items-center justify-center px-4">
+    <div className="surface-glass w-full max-w-xl rounded-3xl border border-slate-200 p-10 text-center shadow-[0_26px_44px_rgba(15,23,42,0.16)]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Error</p>
+      <h1 className="mt-2 font-serif text-6xl text-slate-800">404</h1>
+      <p className="mt-4 text-base text-slate-600">This page does not exist in the CTRG workspace.</p>
+      <Link
+        to="/login"
+        className="mt-6 inline-flex items-center rounded-xl bg-[linear-gradient(140deg,#1e2a4a_0%,#2a3a5f_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(30,42,74,0.32)] transition hover:brightness-110"
+      >
+        Return to Login
+      </Link>
+    </div>
   </div>
 );
 
 const Unauthorized = () => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-    <h1 className="text-6xl font-bold text-red-300">403</h1>
-    <p className="text-xl text-gray-500 mt-4">Unauthorized Access</p>
+  <div className="app-background flex min-h-screen items-center justify-center px-4">
+    <div className="surface-glass w-full max-w-xl rounded-3xl border border-slate-200 p-10 text-center shadow-[0_26px_44px_rgba(15,23,42,0.16)]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600">Access Restricted</p>
+      <h1 className="mt-2 font-serif text-6xl text-slate-800">403</h1>
+      <p className="mt-4 text-base text-slate-600">Your current account role does not have permission for this route.</p>
+      <Link
+        to="/login"
+        className="mt-6 inline-flex items-center rounded-xl bg-[linear-gradient(140deg,#d4a017_0%,#f2cb6b_100%)] px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-[0_12px_26px_rgba(184,133,12,0.28)] transition hover:brightness-105"
+      >
+        Switch Account
+      </Link>
+    </div>
   </div>
 );
 

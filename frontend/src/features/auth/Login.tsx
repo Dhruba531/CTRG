@@ -21,6 +21,8 @@ const Login: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [selectedRole, setSelectedRole] = useState<Role>('src_chair');
     const [rememberMe, setRememberMe] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
@@ -31,6 +33,8 @@ const Login: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMessage('');
+        setIsSubmitting(true);
         try {
             const response = await login(email, password);
 
@@ -52,17 +56,19 @@ const Login: React.FC = () => {
                 }
             }
         } catch (error: any) {
-            const errorMessage = error.response?.data?.non_field_errors?.[0] ||
+            const message = error.response?.data?.non_field_errors?.[0] ||
                                 error.response?.data?.password?.[0] ||
                                 error.response?.data?.email?.[0] ||
                                 error.response?.data?.detail ||
                                 'Login failed. Please check your credentials.';
-            alert(errorMessage);
+            setErrorMessage(message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[#edf2f8]">
+        <div className="app-background relative min-h-screen overflow-hidden bg-[#edf2f8]">
             <div className="pointer-events-none absolute inset-0">
                 <div className="absolute -left-28 top-[-150px] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,_rgba(212,160,23,0.34)_0%,_rgba(212,160,23,0.02)_72%)]" />
                 <div className="absolute right-[-170px] top-16 h-[440px] w-[440px] rounded-full bg-[radial-gradient(circle,_rgba(30,42,74,0.25)_0%,_rgba(30,42,74,0.02)_72%)]" />
@@ -141,6 +147,11 @@ const Login: React.FC = () => {
                             </div>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
+                                {errorMessage && (
+                                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                                        {errorMessage}
+                                    </div>
+                                )}
                                 <div>
                                     <label className="mb-3 block text-sm font-semibold text-[#384867]">Select your role</label>
                                     <div className="grid grid-cols-2 gap-3">
@@ -225,9 +236,10 @@ const Login: React.FC = () => {
 
                                 <button
                                     type="submit"
-                                    className="btn w-full rounded-xl border border-[#b8850c] bg-[linear-gradient(140deg,#d4a017_0%,#f1c350_100%)] py-3 text-base font-bold text-[#1b2747] shadow-[0_14px_26px_rgba(184,133,12,0.34)] transition-all duration-200 hover:translate-y-[-1px] hover:shadow-[0_18px_30px_rgba(184,133,12,0.36)]"
+                                    disabled={isSubmitting}
+                                    className="btn w-full rounded-xl border border-[#b8850c] bg-[linear-gradient(140deg,#d4a017_0%,#f1c350_100%)] py-3 text-base font-bold text-[#1b2747] shadow-[0_14px_26px_rgba(184,133,12,0.34)] transition-all duration-200 hover:translate-y-[-1px] hover:shadow-[0_18px_30px_rgba(184,133,12,0.36)] disabled:cursor-not-allowed disabled:opacity-70"
                                 >
-                                    Sign In
+                                    {isSubmitting ? 'Signing in...' : 'Sign In'}
                                 </button>
 
                                 <div className="border-t border-[#e7edf5] pt-5 text-center text-sm text-[#5f6e8b]">

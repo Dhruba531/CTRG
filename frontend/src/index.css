@@ -1,9 +1,9 @@
-/* CTRG Grant Review System - Industry-Grade Design System */
-/* Navy & Gold Theme with Precise Color Consistency */
+/* CTRG Grant Review System - Refined Visual System */
+/* Navy + Brass palette with editorial typography and soft depth */
 @import "tailwindcss";
 
 /* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap');
 
 /* ========================================
    CSS Custom Properties - Design Tokens
@@ -18,10 +18,10 @@
     --primary-gold-dark: #b8850c;
 
     /* Surface Colors */
-    --surface: #f8f9fa;
+    --surface: #f4f6f8;
     --surface-elevated: #ffffff;
-    --surface-hover: #f3f4f6;
-    --surface-active: #e5e7eb;
+    --surface-hover: #eef2f5;
+    --surface-active: #e2e8ee;
 
     /* Semantic Colors */
     --success: #10b981;
@@ -51,11 +51,17 @@
     --status-final-rejected: #dc2626;
 
     /* Text Colors */
-    --text-primary: #111827;
-    --text-secondary: #4b5563;
-    --text-tertiary: #6b7280;
+    --text-primary: #0f1b31;
+    --text-secondary: #3f4f68;
+    --text-tertiary: #607089;
     --text-disabled: #9ca3af;
     --text-inverse: #ffffff;
+
+    /* Ambient Background */
+    --bg-canvas-start: #e9eef5;
+    --bg-canvas-end: #f7f8fb;
+    --bg-accent-cool: rgba(30, 42, 74, 0.22);
+    --bg-accent-warm: rgba(212, 160, 23, 0.22);
 
     /* Border Colors */
     --border-light: #e5e7eb;
@@ -102,16 +108,54 @@
    Global Styles
    ======================================== */
 body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Manrope', 'Segoe UI', Tahoma, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     color: var(--text-primary);
-    background-color: var(--surface);
+    background:
+        radial-gradient(1100px 440px at 12% -10%, var(--bg-accent-warm) 0%, transparent 60%),
+        radial-gradient(950px 460px at 100% 2%, var(--bg-accent-cool) 0%, transparent 58%),
+        linear-gradient(180deg, var(--bg-canvas-start) 0%, var(--bg-canvas-end) 100%);
+    min-height: 100vh;
+    line-height: 1.5;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Fraunces', Cambria, Georgia, serif;
     font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+#root {
+    min-height: 100vh;
+}
+
+.app-background {
+    position: relative;
+    isolation: isolate;
+}
+
+.app-background::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(15, 27, 49, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 27, 49, 0.03) 1px, transparent 1px);
+    background-size: 30px 30px;
+    mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.7), transparent 90%);
+    z-index: -1;
+}
+
+.surface-glass {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+}
+
+.stagger-in {
+    animation: slideUp var(--transition-normal);
 }
 
 /* ========================================
@@ -233,6 +277,14 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-inverse);
 }
 
+.card-glass {
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-raised);
+    backdrop-filter: blur(10px);
+}
+
 /* Buttons */
 .btn {
     display: inline-flex;
@@ -268,6 +320,10 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--primary-gold-light);
     box-shadow: var(--shadow-raised);
     transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 .btn-secondary {

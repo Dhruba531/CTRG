@@ -41,8 +41,8 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-                serif: ['Playfair Display', 'Georgia', 'serif'],
+                sans: ['Manrope', 'Segoe UI', 'Tahoma', 'sans-serif'],
+                serif: ['Fraunces', 'Cambria', 'Georgia', 'serif'],
             },
             fontSize: {
                 xs: ['12px', { lineHeight: '16px' }],

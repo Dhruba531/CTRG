@@ -188,7 +188,7 @@ const ReviewerRegistration: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col lg:flex-row min-h-screen">
+        <div className="app-background flex min-h-screen flex-col lg:flex-row">
             {/* Left Branding Panel - Desktop Only */}
             <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
                 {/* Navy Gradient Background */}
@@ -248,7 +248,7 @@ const ReviewerRegistration: React.FC = () => {
             </div>
 
             {/* Right Form Panel */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
+            <div className="flex w-full items-center justify-center bg-transparent p-8 lg:w-1/2">
                 <div className="w-full max-w-md animate-fade-in">
                     {/* Back Button */}
                     <button
@@ -291,7 +291,10 @@ const ReviewerRegistration: React.FC = () => {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form
+                        onSubmit={handleSubmit}
+                        className="surface-glass space-y-5 rounded-2xl border border-slate-200/80 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.1)] sm:p-6"
+                    >
                         {/* Name Fields */}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
@@ -375,7 +378,7 @@ const ReviewerRegistration: React.FC = () => {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     name="password"
-                                    placeholder="••••••••"
+                                    placeholder="********"
                                     className="input pl-11 pr-11"
                                     value={formData.password}
                                     onChange={handleChange}
@@ -401,7 +404,7 @@ const ReviewerRegistration: React.FC = () => {
                                 <input
                                     type={showConfirmPassword ? 'text' : 'password'}
                                     name="confirmPassword"
-                                    placeholder="••••••••"
+                                    placeholder="********"
                                     className="input pl-11 pr-11"
                                     value={formData.confirmPassword}
                                     onChange={handleChange}
@@ -445,3 +448,4 @@ const ReviewerRegistration: React.FC = () => {
 };
 
 export default ReviewerRegistration;
+
