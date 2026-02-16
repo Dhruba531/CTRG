@@ -11,7 +11,7 @@
  * - Timeline Practicality (0-5)
  * Total: 100 points
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Send, ArrowLeft, FileText, AlertCircle } from 'lucide-react';
 import { assignmentApi, type ReviewAssignment, type Stage1Score } from '../../services/api';
@@ -54,11 +54,7 @@ const Stage1ReviewForm: React.FC = () => {
     });
     const [comments, setComments] = useState('');
 
-    useEffect(() => {
-        loadAssignment();
-    }, [id]);
-
-    const loadAssignment = async () => {
+    const loadAssignment = useCallback(async () => {
         try {
             setLoading(true);
             const response = await assignmentApi.getProposalDetails(Number(id));
@@ -86,7 +82,11 @@ const Stage1ReviewForm: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
+
+    useEffect(() => {
+        loadAssignment();
+    }, [loadAssignment]);
 
     const totalScore = Object.values(scores).reduce((sum, score) => sum + score, 0);
     const percentageScore = Math.round((totalScore / 100) * 100);

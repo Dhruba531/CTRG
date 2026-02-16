@@ -1,30 +1,104 @@
 /**
- * Pending Reviewers Management Component for SRC Chair.
- * Review and approve/reject pending reviewer registrations.
+ * ============================================================================
+ * PENDING REVIEWERS MANAGEMENT COMPONENT
+ * ============================================================================
+ *
+ * PURPOSE:
+ * Allows SRC Chair (admin) to review and approve/reject reviewer registrations.
+ *
+ * WORKFLOW:
+ * 1. Reviewer registers via public form → account created as INACTIVE
+ * 2. SRC Chair sees pending reviewer in this component
+ * 3. SRC Chair can:
+ *    - APPROVE: Sets is_active=True, user can login
+ *    - REJECT: Permanently deletes the account
+ *
+ * BUSINESS RULES:
+ * - Only inactive reviewers with role='Reviewer' are shown
+ * - Approving sets both User.is_active and ReviewerProfile.is_active_reviewer to True
+ * - Rejecting permanently deletes the user (cannot reject active reviewers)
+ * - Only SRC Chair (admin users) can access this page
+ *
+ * SECURITY:
+ * - Requires admin authentication (IsAdminUser permission)
+ * - Confirmation dialogs prevent accidental approve/reject
+ * - Cannot reject already active reviewers
+ *
+ * API ENDPOINTS USED:
+ * - GET  /api/auth/pending-reviewers/     - Fetch all inactive reviewers
+ * - POST /api/auth/approve-reviewer/<id>/ - Activate reviewer account
+ * - DELETE /api/auth/reject-reviewer/<id>/ - Delete pending account
  */
+
 import React, { useState, useEffect } from 'react';
-import { UserCheck, UserX, Clock, Mail, User, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import {
+    UserCheck,      // Approve button icon
+    UserX,          // Reject button icon
+    Clock,          // Pending status icon
+    Mail,           // Email display icon
+    User,           // Username display icon
+    CheckCircle,    // Success/active status icon
+    XCircle,        // Inactive status icon
+    AlertCircle     // Alert/warning icon
+} from 'lucide-react';
 import api from '../../services/api';
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * PendingReviewer interface
+ * Matches the UserListSerializer from backend with date_joined field
+ */
 interface PendingReviewer {
-    id: number;
-    username: string;
-    email: string;
-    full_name: string;
-    role: string;
-    is_active: boolean;
-    date_joined: string;
+    id: number;           // User primary key
+    username: string;     // Unique username
+    email: string;        // Unique email address
+    full_name: string;    // First name + Last name combined
+    role: string;         // Should always be "Reviewer" for this list
+    is_active: boolean;   // Should always be False for pending reviewers
+    date_joined: string;  // ISO timestamp of registration
 }
 
 const PendingReviewers: React.FC = () => {
+    // ========================================================================
+    // STATE MANAGEMENT
+    // ========================================================================
+
+    /**
+     * List of pending reviewers (inactive accounts awaiting approval)
+     */
     const [pendingReviewers, setPendingReviewers] = useState<PendingReviewer[]>([]);
+
+    /**
+     * Loading state while fetching data from backend
+     */
     const [loading, setLoading] = useState(true);
+
+    /**
+     * Track which reviewer is currently being processed (approve/reject)
+     * Prevents multiple simultaneous operations and shows loading state
+     */
     const [processing, setProcessing] = useState<number | null>(null);
 
+    // ========================================================================
+    // LIFECYCLE: Load pending reviewers on component mount
+    // ========================================================================
     useEffect(() => {
         loadPendingReviewers();
     }, []);
 
+    // ========================================================================
+    // DATA FETCHING
+    // ========================================================================
+
+    /**
+     * Load all pending (inactive) reviewer registrations
+     *
+     * API: GET /api/auth/pending-reviewers/
+     * Returns: Users where groups__name='Reviewer' AND is_active=False
+     */
     const loadPendingReviewers = async () => {
         try {
             setLoading(true);
@@ -32,50 +106,104 @@ const PendingReviewers: React.FC = () => {
             setPendingReviewers(response.data);
         } catch (err) {
             console.error("Failed to load pending reviewers", err);
-            setPendingReviewers([]);
+            setPendingReviewers([]); // Set empty array on error
         } finally {
             setLoading(false);
         }
     };
 
+    // ========================================================================
+    // APPROVAL HANDLER
+    // ========================================================================
+
+    /**
+     * Approve a pending reviewer
+     *
+     * WHAT IT DOES:
+     * 1. Sets User.is_active = True (enables login)
+     * 2. Sets ReviewerProfile.is_active_reviewer = True (enables review assignments)
+     * 3. Removes from pending list in UI
+     *
+     * SECURITY:
+     * - Requires admin authentication
+     * - Confirmation dialog prevents accidents
+     * - Backend validates user is actually a pending reviewer
+     *
+     * API: POST /api/auth/approve-reviewer/<id>/
+     */
     const handleApprove = async (reviewerId: number) => {
+        // Confirmation dialog to prevent accidental approval
         if (!confirm('Are you sure you want to approve this reviewer? They will be able to login and review proposals.')) {
             return;
         }
 
         try {
+            // Set processing state to show loading and disable buttons
             setProcessing(reviewerId);
+
+            // Call approval endpoint
             await api.post(`/auth/approve-reviewer/${reviewerId}/`);
 
-            // Remove from pending list
+            // Remove from pending list (optimistic UI update)
             setPendingReviewers(prev => prev.filter(r => r.id !== reviewerId));
 
+            // Success feedback
             alert('Reviewer approved successfully! They can now login to the system.');
         } catch (err: any) {
+            // Extract error message from backend response
             const errorMsg = err.response?.data?.error || 'Failed to approve reviewer';
             alert(errorMsg);
         } finally {
+            // Clear processing state to re-enable buttons
             setProcessing(null);
         }
     };
 
+    // ========================================================================
+    // REJECTION HANDLER
+    // ========================================================================
+
+    /**
+     * Reject a pending reviewer registration
+     *
+     * WHAT IT DOES:
+     * 1. Permanently DELETES the user account
+     * 2. Deletes associated ReviewerProfile
+     * 3. Removes from pending list in UI
+     *
+     * SAFETY CHECKS (Backend):
+     * - Cannot reject active reviewers
+     * - Must be in Reviewer group
+     * - Must be inactive
+     *
+     * WARNING: This is a destructive operation - account cannot be recovered!
+     *
+     * API: DELETE /api/auth/reject-reviewer/<id>/
+     */
     const handleReject = async (reviewerId: number) => {
+        // Strong confirmation dialog for destructive action
         if (!confirm('Are you sure you want to reject this reviewer registration? This will delete their account permanently.')) {
             return;
         }
 
         try {
+            // Set processing state
             setProcessing(reviewerId);
+
+            // Call deletion endpoint
             await api.delete(`/auth/reject-reviewer/${reviewerId}/`);
 
-            // Remove from pending list
+            // Remove from pending list (optimistic UI update)
             setPendingReviewers(prev => prev.filter(r => r.id !== reviewerId));
 
+            // Success feedback
             alert('Reviewer registration rejected.');
         } catch (err: any) {
+            // Extract error message from backend response
             const errorMsg = err.response?.data?.error || 'Failed to reject reviewer';
             alert(errorMsg);
         } finally {
+            // Clear processing state
             setProcessing(null);
         }
     };

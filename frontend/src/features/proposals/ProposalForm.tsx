@@ -3,7 +3,7 @@
  * For creating new proposals or editing drafts.
  * Includes grant cycle selection, file upload with 50MB limit, and draft saving.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Send, ArrowLeft, Upload, FileText, AlertCircle, X } from 'lucide-react';
 import { proposalApi, cycleApi, type GrantCycle } from '../../services/api';
@@ -48,11 +48,7 @@ const ProposalForm: React.FC = () => {
     const [existingFile, setExistingFile] = useState<string | null>(null);
     const [existingTemplate, setExistingTemplate] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadData();
-    }, [id]);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
 
@@ -92,7 +88,11 @@ const ProposalForm: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id, navigate]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -187,7 +187,6 @@ const ProposalForm: React.FC = () => {
             setError(null);
 
             const data = buildFormData();
-            data.append('status', 'DRAFT');
 
             if (isEditing) {
                 await proposalApi.update(Number(id), data);
@@ -216,18 +215,25 @@ const ProposalForm: React.FC = () => {
             setError(null);
 
             const data = buildFormData();
-            data.append('status', 'SUBMITTED');
+            let proposalId = isEditing ? Number(id) : null;
 
-            if (isEditing) {
-                await proposalApi.update(Number(id), data);
+            if (isEditing && proposalId !== null) {
+                await proposalApi.update(proposalId, data);
             } else {
-                await proposalApi.create(data);
+                const createResponse = await proposalApi.create(data);
+                proposalId = createResponse.data.id;
             }
+
+            if (proposalId === null || Number.isNaN(proposalId)) {
+                throw new Error('Unable to determine proposal ID for submission');
+            }
+
+            await proposalApi.submit(proposalId);
 
             alert('Proposal submitted successfully!');
             navigate('/pi/dashboard');
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to submit proposal');
+            setError(err.response?.data?.error || err.message || 'Failed to submit proposal');
         } finally {
             setSubmitting(false);
         }

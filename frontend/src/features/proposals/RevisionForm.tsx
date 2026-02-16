@@ -3,7 +3,7 @@
  * For submitting revisions after Stage 1 tentative acceptance.
  * Includes response to reviewers document and revised proposal upload.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, FileText, AlertCircle, X, Send, Clock, CheckCircle } from 'lucide-react';
 import { proposalApi, type Proposal } from '../../services/api';
@@ -18,16 +18,13 @@ const RevisionForm: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [proposal, setProposal] = useState<Proposal | null>(null);
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
 
     const [revisedProposal, setRevisedProposal] = useState<File | null>(null);
     const [responseToReviewers, setResponseToReviewers] = useState<File | null>(null);
     const [revisionNotes, setRevisionNotes] = useState('');
 
-    useEffect(() => {
-        loadProposal();
-    }, [id]);
-
-    const loadProposal = async () => {
+    const loadProposal = useCallback(async () => {
         try {
             setLoading(true);
             const response = await proposalApi.getById(Number(id));
@@ -38,7 +35,6 @@ const RevisionForm: React.FC = () => {
                 id: Number(id),
                 proposal_code: 'CTRG-2025-005',
                 title: 'Machine Learning in Drug Discovery',
-                pi: 1,
                 pi_name: 'Dr. John Smith',
                 pi_department: 'Computer Science',
                 pi_email: 'smith@nsu.edu',
@@ -54,7 +50,19 @@ const RevisionForm: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
+
+    useEffect(() => {
+        loadProposal();
+    }, [loadProposal]);
+
+    useEffect(() => {
+        const intervalId = window.setInterval(() => {
+            setCurrentTime(Date.now());
+        }, 60 * 1000);
+
+        return () => window.clearInterval(intervalId);
+    }, []);
 
     const handleFileChange = (
         e: React.ChangeEvent<HTMLInputElement>,
@@ -74,7 +82,7 @@ const RevisionForm: React.FC = () => {
     const getDaysRemaining = () => {
         if (!proposal?.revision_deadline) return 0;
         return Math.ceil(
-            (new Date(proposal.revision_deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+            (new Date(proposal.revision_deadline).getTime() - currentTime) / (1000 * 60 * 60 * 24)
         );
     };
 

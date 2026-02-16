@@ -28,9 +28,33 @@ const SRCChairDashboard: React.FC = () => {
     const [recentProposals, setRecentProposals] = useState<Proposal[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [currentDate, setCurrentDate] = useState(() =>
+        new Date().toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        })
+    );
 
     useEffect(() => {
         loadDashboard();
+    }, []);
+
+    useEffect(() => {
+        // Refresh date periodically so it rolls over automatically at midnight.
+        const intervalId = window.setInterval(() => {
+            setCurrentDate(
+                new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                })
+            );
+        }, 60 * 1000);
+
+        return () => window.clearInterval(intervalId);
     }, []);
 
     const loadDashboard = async () => {
@@ -42,7 +66,7 @@ const SRCChairDashboard: React.FC = () => {
             ]);
             setStats(statsRes.data);
             setRecentProposals(proposalsRes.data.slice(0, 5));
-        } catch (err) {
+        } catch {
             // Mock data
             setStats({
                 total_proposals: 24,
@@ -60,9 +84,9 @@ const SRCChairDashboard: React.FC = () => {
                 }
             });
             setRecentProposals([
-                { id: 1, proposal_code: 'CTRG-2025-001', title: 'AI for Climate Change Prediction', pi: 1, pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: '', fund_requested: 50000, cycle: 1, cycle_name: 'Spring 2025', status: 'UNDER_STAGE_1_REVIEW', status_display: 'Under Stage 1 Review', created_at: '2025-02-01', abstract: '' },
-                { id: 2, proposal_code: 'CTRG-2025-002', title: 'Blockchain in Healthcare Records', pi: 2, pi_name: 'Dr. Sarah Jones', pi_department: 'Information Systems', pi_email: '', fund_requested: 45000, cycle: 1, cycle_name: 'Spring 2025', status: 'REVISION_REQUESTED', status_display: 'Revision Requested', created_at: '2025-01-28', revision_deadline: '2025-02-15', abstract: '' },
-                { id: 3, proposal_code: 'CTRG-2025-003', title: 'Quantum Computing Applications', pi: 3, pi_name: 'Dr. Wei Chen', pi_department: 'Physics', pi_email: '', fund_requested: 75000, cycle: 1, cycle_name: 'Spring 2025', status: 'SUBMITTED', status_display: 'Submitted', created_at: '2025-01-25', abstract: '' },
+                { id: 1, proposal_code: 'CTRG-2025-001', title: 'AI for Climate Change Prediction', pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: '', fund_requested: 50000, cycle: 1, cycle_name: 'Spring 2025', status: 'UNDER_STAGE_1_REVIEW', status_display: 'Under Stage 1 Review', created_at: '2025-02-01', abstract: '' },
+                { id: 2, proposal_code: 'CTRG-2025-002', title: 'Blockchain in Healthcare Records', pi_name: 'Dr. Sarah Jones', pi_department: 'Information Systems', pi_email: '', fund_requested: 45000, cycle: 1, cycle_name: 'Spring 2025', status: 'REVISION_REQUESTED', status_display: 'Revision Requested', created_at: '2025-01-28', revision_deadline: '2025-02-15', abstract: '' },
+                { id: 3, proposal_code: 'CTRG-2025-003', title: 'Quantum Computing Applications', pi_name: 'Dr. Wei Chen', pi_department: 'Physics', pi_email: '', fund_requested: 75000, cycle: 1, cycle_name: 'Spring 2025', status: 'SUBMITTED', status_display: 'Submitted', created_at: '2025-01-25', abstract: '' },
             ]);
         } finally {
             setLoading(false);
@@ -124,7 +148,7 @@ const SRCChairDashboard: React.FC = () => {
                     <div className="flex justify-between items-start">
                         <div>
                             <h1 className="text-3xl font-bold">Welcome back, SRC Chair</h1>
-                            <p className="text-blue-200 mt-2">Sunday, February 8, 2026</p>
+                            <p className="text-blue-200 mt-2">{currentDate}</p>
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">

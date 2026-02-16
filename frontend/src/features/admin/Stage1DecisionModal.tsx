@@ -2,7 +2,7 @@
  * Stage 1 Decision Modal Component.
  * Allows SRC Chair to make Stage 1 decisions on proposals.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, AlertCircle, CheckCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
 import { proposalApi, type Proposal, type ReviewAssignment } from '../../services/api';
 
@@ -20,11 +20,7 @@ const Stage1DecisionModal: React.FC<Props> = ({ proposal, onClose, onSuccess }) 
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadReviews();
-    }, [proposal.id]);
-
-    const loadReviews = async () => {
+    const loadReviews = useCallback(async () => {
         try {
             setLoading(true);
             const response = await proposalApi.getReviews(proposal.id);
@@ -36,7 +32,11 @@ const Stage1DecisionModal: React.FC<Props> = ({ proposal, onClose, onSuccess }) 
         } finally {
             setLoading(false);
         }
-    };
+    }, [proposal.id]);
+
+    useEffect(() => {
+        loadReviews();
+    }, [loadReviews]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -22,10 +22,29 @@ const ReviewerDashboard: React.FC = () => {
     const [stats, setStats] = useState<ReviewerStats>({ total_assignments: 0, pending: 0, completed: 0, overdue: 0 });
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
 
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        const intervalId = window.setInterval(() => {
+            setCurrentTime(Date.now());
+        }, 60 * 1000);
+
+        return () => window.clearInterval(intervalId);
+    }, []);
+
+    useEffect(() => {
+        setStats((prev) => ({
+            ...prev,
+            overdue: assignments.filter(a =>
+                (a.status === 'ASSIGNED' || a.status === 'IN_PROGRESS') &&
+                new Date(a.deadline).getTime() < currentTime
+            ).length
+        }));
+    }, [assignments, currentTime]);
 
     const loadData = async () => {
         try {
@@ -72,11 +91,11 @@ const ReviewerDashboard: React.FC = () => {
     };
 
     const isOverdue = (deadline: string, status: string) => {
-        return (status === 'ASSIGNED' || status === 'IN_PROGRESS') && new Date(deadline) < new Date();
+        return (status === 'ASSIGNED' || status === 'IN_PROGRESS') && new Date(deadline).getTime() < currentTime;
     };
 
     const getDaysRemaining = (deadline: string) => {
-        const days = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        const days = Math.ceil((new Date(deadline).getTime() - currentTime) / (1000 * 60 * 60 * 24));
         return days;
     };
 

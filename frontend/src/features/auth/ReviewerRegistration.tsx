@@ -1,49 +1,123 @@
+/**
+ * ReviewerRegistration Component
+ *
+ * Public-facing registration form for reviewers to self-register.
+ *
+ * WORKFLOW:
+ * 1. Reviewer fills out registration form
+ * 2. Account is created as INACTIVE (pending approval)
+ * 3. SRC Chair receives notification and reviews in admin panel
+ * 4. Upon approval, account becomes active and reviewer can login
+ *
+ * SECURITY:
+ * - No authentication required (public endpoint)
+ * - Password validated on backend (Django password validators)
+ * - Email and username uniqueness enforced
+ * - Account starts inactive to prevent unauthorized access
+ */
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    ClipboardCheck,
-    Mail,
-    Lock,
-    Eye,
-    EyeOff,
-    User,
-    ArrowLeft
+    ClipboardCheck,  // Icon for approval notice
+    Mail,            // Icon for email field
+    Lock,            // Icon for password fields
+    Eye,             // Show password icon
+    EyeOff,          // Hide password icon
+    User,            // Icon for name fields
+    ArrowLeft        // Back button icon
 } from 'lucide-react';
 import api from '../../services/api';
 
 const ReviewerRegistration: React.FC = () => {
+    // ========================================================================
+    // STATE MANAGEMENT
+    // ========================================================================
+
+    /**
+     * Form data state
+     * Stores all user input before submission
+     */
     const [formData, setFormData] = useState({
         username: '',
         email: '',
         password: '',
-        confirmPassword: '',
+        confirmPassword: '',  // Client-side validation only, not sent to backend
         firstName: '',
         lastName: ''
     });
+
+    /**
+     * Password visibility toggles
+     * Controls whether passwords are shown as text or dots
+     */
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    /**
+     * Error message state
+     * Displays validation errors from backend or client-side checks
+     */
     const [error, setError] = useState('');
+
+    /**
+     * Submission loading state
+     * Prevents double-submission and shows loading feedback
+     */
     const [isSubmitting, setIsSubmitting] = useState(false);
+
     const navigate = useNavigate();
 
+    // ========================================================================
+    // EVENT HANDLERS
+    // ========================================================================
+
+    /**
+     * Handle input changes
+     * Updates form data and clears any existing errors
+     */
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({
             ...formData,
             [e.target.name]: e.target.value
         });
+        // Clear error when user starts typing
         setError('');
     };
 
+    /**
+     * Handle form submission
+     *
+     * VALIDATION FLOW:
+     * 1. Client-side: Password match & length
+     * 2. Backend: Email/username uniqueness, password strength (Django validators)
+     *
+     * SUCCESS FLOW:
+     * - Account created as INACTIVE
+     * - Reviewer assigned to "Reviewer" group
+     * - ReviewerProfile created (also inactive)
+     * - User redirected to login with approval message
+     *
+     * ERROR HANDLING:
+     * - Django REST Framework returns errors as arrays: {"email": ["Error message"]}
+     * - We extract the first error from each field's array
+     * - Display all field errors in a user-friendly format
+     */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
-        // Validation
+        // ====================================================================
+        // CLIENT-SIDE VALIDATION
+        // ====================================================================
+
+        // Check if passwords match
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
             return;
         }
 
+        // Basic password length check (Django has more strict validators on backend)
         if (formData.password.length < 8) {
             setError('Password must be at least 8 characters long');
             return;
@@ -52,6 +126,10 @@ const ReviewerRegistration: React.FC = () => {
         setIsSubmitting(true);
 
         try {
+            // ================================================================
+            // API CALL: POST /auth/register-reviewer/
+            // ================================================================
+            // Note: confirmPassword is NOT sent to backend (only used for client validation)
             const response = await api.post('/auth/register-reviewer/', {
                 username: formData.username,
                 email: formData.email,
@@ -60,30 +138,51 @@ const ReviewerRegistration: React.FC = () => {
                 last_name: formData.lastName
             });
 
+            // ================================================================
+            // SUCCESS: Account created (but inactive, awaiting approval)
+            // ================================================================
             if (response.status === 201) {
                 alert('Registration successful! Your account has been created and is pending approval from the SRC Chair. You will be able to login once your account is approved.');
                 navigate('/login');
             }
         } catch (err: any) {
+            // ================================================================
+            // ERROR HANDLING
+            // ================================================================
+
             const errorData = err.response?.data;
             if (errorData) {
-                // Handle specific field errors
+                /**
+                 * Django REST Framework returns validation errors as arrays:
+                 * Example: { "email": ["A user with this email already exists."] }
+                 *
+                 * We need to:
+                 * 1. Check if error is an array and extract first element
+                 * 2. Format each field error with field name prefix
+                 * 3. Combine all errors with newlines
+                 */
                 const errorMessages = [];
-                if (errorData.username) errorMessages.push(`Username: ${errorData.username}`);
-                if (errorData.email) errorMessages.push(`Email: ${errorData.email}`);
-                if (errorData.password) errorMessages.push(`Password: ${errorData.password}`);
-                if (errorData.first_name) errorMessages.push(`First Name: ${errorData.first_name}`);
-                if (errorData.last_name) errorMessages.push(`Last Name: ${errorData.last_name}`);
+
+                // Extract error messages from each field (handle array or string format)
+                if (errorData.username) errorMessages.push(`Username: ${Array.isArray(errorData.username) ? errorData.username[0] : errorData.username}`);
+                if (errorData.email) errorMessages.push(`Email: ${Array.isArray(errorData.email) ? errorData.email[0] : errorData.email}`);
+                if (errorData.password) errorMessages.push(`Password: ${Array.isArray(errorData.password) ? errorData.password[0] : errorData.password}`);
+                if (errorData.first_name) errorMessages.push(`First Name: ${Array.isArray(errorData.first_name) ? errorData.first_name[0] : errorData.first_name}`);
+                if (errorData.last_name) errorMessages.push(`Last Name: ${Array.isArray(errorData.last_name) ? errorData.last_name[0] : errorData.last_name}`);
 
                 if (errorMessages.length > 0) {
+                    // Display specific field errors
                     setError(errorMessages.join('\n'));
                 } else {
+                    // Fallback for unexpected error format
                     setError('Registration failed. Please check your information and try again.');
                 }
             } else {
+                // Network error or server down
                 setError('Registration failed. Please try again later.');
             }
         } finally {
+            // Always re-enable submit button (whether success or error)
             setIsSubmitting(false);
         }
     };

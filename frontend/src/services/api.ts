@@ -64,6 +64,13 @@ api.interceptors.response.use(
     (response) => {
         if (response.data && typeof response.data === 'object' &&
             'results' in response.data && 'count' in response.data) {
+            // Preserve pagination metadata on the response object so callers
+            // can implement page navigation when needed.
+            (response as any).pagination = {
+                count: (response.data as any).count,
+                next: (response.data as any).next ?? null,
+                previous: (response.data as any).previous ?? null,
+            };
             response.data = response.data.results;
         }
         return response;
@@ -183,7 +190,6 @@ export interface Proposal {
     proposal_code: string;
     title: string;
     abstract: string;
-    pi: number;
     pi_name: string;
     pi_department: string;
     pi_email: string;
@@ -326,7 +332,7 @@ export const assignmentApi = {
     submitScore: (id: number, data: Record<string, unknown>) =>
         api.post(`/assignments/${id}/submit_score/`, data),
     submitStage2Review: (id: number, data: Record<string, unknown>) =>
-        api.post(`/assignments/${id}/submit_stage2_review/`, data),
+        api.post(`/assignments/${id}/submit_score/`, data),
     getProposalDetails: (id: number) => api.get<ReviewAssignment>(`/assignments/${id}/proposal_details/`),
 };
 

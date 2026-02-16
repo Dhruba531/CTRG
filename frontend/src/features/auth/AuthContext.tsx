@@ -34,12 +34,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = async (email: string, password: string) => {
         const data = await authService.login(email, password);
         setToken(data.access);
-        setRole(data.role);
+        setRole(data.role || null);
         setUser(data.user);
 
-        localStorage.setItem('token', data.access);
-        localStorage.setItem('role', data.role);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        authService.setAuthData(data);
 
         return data;
     };

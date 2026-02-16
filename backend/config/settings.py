@@ -89,15 +89,14 @@ MIDDLEWARE = [
 
     # Django core middleware
     'django.middleware.security.SecurityMiddleware',
+    # GZip compression should be early to wrap most responses
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
-    # GZip compression middleware (should be near the top after security middleware)
-    'django.middleware.gzip.GZipMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

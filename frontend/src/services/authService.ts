@@ -38,7 +38,7 @@ export interface User {
     email: string;
     first_name: string;
     last_name: string;
-    role: string;
+    role: string | null;
     is_active: boolean;
     is_staff?: boolean;
 }
@@ -48,7 +48,7 @@ export interface User {
  */
 export interface LoginResponse {
     access: string;  // Authentication token
-    role: string;    // User's role (PI, Reviewer, SRC_Chair)
+    role: string | null;    // User's role (PI, Reviewer, SRC_Chair)
     user: User;      // Complete user profile
 }
 
@@ -62,6 +62,23 @@ export interface RegisterData {
     first_name: string;
     last_name: string;
     role: 'PI' | 'Reviewer' | 'SRC_Chair';
+}
+
+export interface ReviewerImportResult {
+    created_count: number;
+    error_count: number;
+    created: Array<{
+        row: number;
+        id: number;
+        email: string;
+        username: string;
+        temporary_password?: string;
+    }>;
+    errors: Array<{
+        row: number;
+        email: string;
+        errors: Record<string, unknown>;
+    }>;
 }
 
 /**
@@ -189,6 +206,22 @@ export const register = async (userData: RegisterData, token: string): Promise<U
     return response.data;
 };
 
+export const importReviewersFromExcel = async (
+    file: File,
+    token: string
+): Promise<ReviewerImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await authApi.post<ReviewerImportResult>('/import-reviewers/', formData, {
+        headers: {
+            Authorization: `Token ${token}`,
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
 /**
  * Change current user's password
  *
@@ -260,7 +293,8 @@ export const getToken = (): string | null => {
  * @returns Stored role string or null if not logged in
  */
 export const getRole = (): string | null => {
-    return localStorage.getItem('role');
+    const role = localStorage.getItem('role');
+    return role && role !== 'null' && role !== 'undefined' ? role : null;
 };
 
 /**
@@ -293,7 +327,11 @@ export const getUser = (): Partial<User> => {
  */
 export const setAuthData = (loginResponse: LoginResponse): void => {
     localStorage.setItem('token', loginResponse.access);
-    localStorage.setItem('role', loginResponse.role);
+    if (loginResponse.role) {
+        localStorage.setItem('role', loginResponse.role);
+    } else {
+        localStorage.removeItem('role');
+    }
     localStorage.setItem('user', JSON.stringify(loginResponse.user));
 };
 

@@ -3,7 +3,21 @@ Report Generation Module.
 Generates PDF and Word documents for proposals and reviews.
 """
 import io
-from datetime import datetime
+import logging
+from xml.sax.saxutils import escape
+
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
+
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_text(value):
+    """Escape dynamic values before inserting into ReportLab Paragraph markup."""
+    if value is None:
+        return ""
+    return escape(str(value))
 
 
 def generate_combined_review_pdf(proposal):
@@ -43,16 +57,21 @@ def generate_combined_review_pdf(proposal):
         spaceAfter=30,
         alignment=1  # Center
     )
-    story.append(Paragraph(f"Combined Review Report", title_style))
+    story.append(Paragraph("Combined Review Report", title_style))
     story.append(Spacer(1, 12))
     
     # Proposal Details
-    story.append(Paragraph(f"<b>Proposal Code:</b> {proposal.proposal_code}", styles['Normal']))
-    story.append(Paragraph(f"<b>Title:</b> {proposal.title}", styles['Normal']))
-    story.append(Paragraph(f"<b>PI:</b> {proposal.pi_name}", styles['Normal']))
-    story.append(Paragraph(f"<b>Department:</b> {proposal.pi_department}", styles['Normal']))
-    story.append(Paragraph(f"<b>Funding Requested:</b> ${proposal.fund_requested:,.2f}", styles['Normal']))
-    story.append(Paragraph(f"<b>Status:</b> {proposal.get_status_display()}", styles['Normal']))
+    fund_requested = proposal.fund_requested
+    if fund_requested is None:
+        fund_requested_text = "N/A"
+    else:
+        fund_requested_text = f"${fund_requested:,.2f}"
+    story.append(Paragraph(f"<b>Proposal Code:</b> {_safe_text(proposal.proposal_code)}", styles['Normal']))
+    story.append(Paragraph(f"<b>Title:</b> {_safe_text(proposal.title)}", styles['Normal']))
+    story.append(Paragraph(f"<b>PI:</b> {_safe_text(proposal.pi_name)}", styles['Normal']))
+    story.append(Paragraph(f"<b>Department:</b> {_safe_text(proposal.pi_department)}", styles['Normal']))
+    story.append(Paragraph(f"<b>Funding Requested:</b> {_safe_text(fund_requested_text)}", styles['Normal']))
+    story.append(Paragraph(f"<b>Status:</b> {_safe_text(proposal.get_status_display())}", styles['Normal']))
     story.append(Spacer(1, 20))
     
     # Stage 1 Reviews
@@ -103,9 +122,12 @@ def generate_combined_review_pdf(proposal):
             
             if score.narrative_comments:
                 story.append(Paragraph(f"<b>Comments:</b>", styles['Normal']))
-                story.append(Paragraph(score.narrative_comments, styles['Normal']))
+                story.append(Paragraph(_safe_text(score.narrative_comments), styles['Normal']))
             
+        except ObjectDoesNotExist:
+            story.append(Paragraph("Score data not available", styles['Normal']))
         except Exception:
+            logger.exception("Unexpected error while rendering stage 1 score for assignment_id=%s", assignment.id)
             story.append(Paragraph("Score data not available", styles['Normal']))
         
         story.append(Spacer(1, 15))
@@ -129,14 +151,17 @@ def generate_combined_review_pdf(proposal):
         
         try:
             review = assignment.stage2_review
-            story.append(Paragraph(f"<b>Concerns Addressed:</b> {review.get_concerns_addressed_display()}", styles['Normal']))
-            story.append(Paragraph(f"<b>Recommendation:</b> {review.get_revised_recommendation_display()}", styles['Normal']))
-            if review.revised_score:
-                story.append(Paragraph(f"<b>Revised Score:</b> {review.revised_score}%", styles['Normal']))
+            story.append(Paragraph(f"<b>Concerns Addressed:</b> {_safe_text(review.get_concerns_addressed_display())}", styles['Normal']))
+            story.append(Paragraph(f"<b>Recommendation:</b> {_safe_text(review.get_revised_recommendation_display())}", styles['Normal']))
+            if review.revised_score is not None:
+                story.append(Paragraph(f"<b>Revised Score:</b> {_safe_text(review.revised_score)}%", styles['Normal']))
             if review.comments:
                 story.append(Paragraph(f"<b>Comments:</b>", styles['Normal']))
-                story.append(Paragraph(review.comments, styles['Normal']))
+                story.append(Paragraph(_safe_text(review.comments), styles['Normal']))
+        except ObjectDoesNotExist:
+            story.append(Paragraph("Review data not available", styles['Normal']))
         except Exception:
+            logger.exception("Unexpected error while rendering stage 2 review for assignment_id=%s", assignment.id)
             story.append(Paragraph("Review data not available", styles['Normal']))
         
         story.append(Spacer(1, 15))
@@ -147,7 +172,7 @@ def generate_combined_review_pdf(proposal):
     # Footer
     story.append(Spacer(1, 30))
     story.append(Paragraph(
-        f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"Generated on {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",
         ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
     ))
     
@@ -187,8 +212,8 @@ def generate_summary_report(cycle):
     styles = getSampleStyleSheet()
     
     # Title
-    story.append(Paragraph(f"CTRG Grant Cycle Summary Report", styles['Heading1']))
-    story.append(Paragraph(f"{cycle.name} ({cycle.year})", styles['Heading2']))
+    story.append(Paragraph("CTRG Grant Cycle Summary Report", styles['Heading1']))
+    story.append(Paragraph(f"{_safe_text(cycle.name)} ({_safe_text(cycle.year)})", styles['Heading2']))
     story.append(Spacer(1, 20))
     
     proposals = cycle.proposals.all()
@@ -216,7 +241,7 @@ def generate_summary_report(cycle):
     
     story.append(Spacer(1, 20))
     story.append(Paragraph(
-        f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"Generated on {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",
         ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
     ))
     

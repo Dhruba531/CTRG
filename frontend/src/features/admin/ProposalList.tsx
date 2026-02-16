@@ -90,7 +90,7 @@ const ProposalList: React.FC = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-        } catch (err) {
+        } catch {
             alert('Failed to download report. Please try again.');
         }
     };
@@ -145,7 +145,7 @@ const ProposalList: React.FC = () => {
 
             await assignmentApi.bulkNotify(pendingIds);
             alert(`Notification sent to ${pendingIds.length} reviewer(s).`);
-        } catch (err) {
+        } catch {
             alert('Failed to send notifications. Please try again.');
         }
     };

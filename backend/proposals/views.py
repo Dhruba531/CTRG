@@ -109,11 +109,11 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
         # Base queryset with optimizations
         base_queryset = Proposal.objects.select_related(
-            'cycle'         # ForeignKey to GrantCycle
+            'cycle',          # ForeignKey to GrantCycle
+            'stage1_decision',  # Reverse OneToOne to Stage1Decision
+            'final_decision'    # Reverse OneToOne to FinalDecision
         ).prefetch_related(
             'review_assignments',  # Reverse FK to ReviewAssignments
-            'stage1_decision',  # Reverse FK to Stage1Decision
-            'final_decision'    # Reverse FK to FinalDecision
         )
 
         # Admin sees all
@@ -126,9 +126,9 @@ class ProposalViewSet(viewsets.ModelViewSet):
             reviewer=user
         ).values_list('proposal_id', flat=True)
 
-        # Return assigned proposals for reviewers
+        # Return own PI proposals and/or assigned proposals for reviewers
         return base_queryset.filter(
-            Q(id__in=reviewer_proposal_ids)
+            Q(pi_email=user.email) | Q(id__in=reviewer_proposal_ids)
         ).distinct()
     
     def perform_create(self, serializer):

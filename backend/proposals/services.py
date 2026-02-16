@@ -2,11 +2,14 @@
 Business Logic Services for Proposals Module.
 Handles proposal lifecycle, status transitions, and notifications.
 """
+import logging
 from django.utils import timezone
 from django.db.models import Avg
 from decimal import Decimal
 from datetime import timedelta
 from .models import Proposal, Stage1Decision, FinalDecision, AuditLog
+
+logger = logging.getLogger(__name__)
 
 
 class ProposalService:
@@ -14,11 +17,15 @@ class ProposalService:
     
     @staticmethod
     def generate_proposal_code(cycle):
-        """Generate unique proposal code like CTRG-2025-001"""
+        """Generate unique proposal code like CTRG-2025-001."""
         from .models import Proposal
-        cycle_year = cycle.year.split('-')[0] if cycle.year else str(timezone.now().year)
-        count = Proposal.objects.filter(cycle=cycle).count() + 1
-        return f"CTRG-{cycle_year}-{count:03d}"
+        cycle_year = str(cycle.year).split('-')[0] if cycle and cycle.year else str(timezone.now().year)
+        count = Proposal.objects.filter(proposal_code__startswith=f"CTRG-{cycle_year}-").count() + 1
+        proposal_code = f"CTRG-{cycle_year}-{count:03d}"
+        while Proposal.objects.filter(proposal_code=proposal_code).exists():
+            count += 1
+            proposal_code = f"CTRG-{cycle_year}-{count:03d}"
+        return proposal_code
     
     @staticmethod
     def submit_proposal(proposal):
@@ -101,16 +108,20 @@ class ProposalService:
         )
         
         # Update proposal status based on decision
+        should_save_proposal = True
         if decision == Stage1Decision.Decision.REJECT:
             proposal.status = Proposal.Status.STAGE_1_REJECTED
         elif decision == Stage1Decision.Decision.ACCEPT:
             proposal.status = Proposal.Status.ACCEPTED_NO_CORRECTIONS
         elif decision == Stage1Decision.Decision.TENTATIVELY_ACCEPT:
+            # Reflect Tentative Acceptance then immediately open revision window
             proposal.status = Proposal.Status.TENTATIVELY_ACCEPTED
-            # Start revision window
+            proposal.save(update_fields=['status'])
             ProposalService.start_revision_window(proposal)
+            should_save_proposal = False
         
-        proposal.save()
+        if should_save_proposal:
+            proposal.save()
         
         # Audit log
         AuditLog.objects.create(
@@ -135,8 +146,9 @@ class ProposalService:
         proposal.status = Proposal.Status.REVISION_REQUESTED
         proposal.revision_deadline = timezone.now() + timedelta(days=days)
         proposal.save()
-        
-        # TODO: Send email notification to PI
+
+        # Notify PI that revision is required.
+        EmailService.send_revision_request_email(proposal)
         return proposal
     
     @staticmethod
@@ -156,6 +168,8 @@ class ProposalService:
             proposal.response_to_reviewers_file = response_file
         
         proposal.status = Proposal.Status.REVISED_PROPOSAL_SUBMITTED
+        # Immediately move to Stage 2 review as per required flow
+        proposal.status = Proposal.Status.UNDER_STAGE_2_REVIEW
         proposal.save()
         
         AuditLog.objects.create(
@@ -203,6 +217,24 @@ class ProposalService:
         """
         Apply final decision after Stage 2 review.
         """
+        allowed_statuses = {
+            Proposal.Status.UNDER_STAGE_2_REVIEW,
+            Proposal.Status.REVISED_PROPOSAL_SUBMITTED,
+        }
+        if proposal.status not in allowed_statuses:
+            raise ValueError("Final decision can only be applied after Stage 2 workflow starts")
+        if hasattr(proposal, 'final_decision'):
+            raise ValueError("Final decision already exists for this proposal")
+
+        # If Stage 2 assignments exist, ensure they are complete before final decision.
+        from reviews.models import ReviewAssignment
+        stage2_assignments = ReviewAssignment.objects.filter(
+            proposal=proposal,
+            stage=ReviewAssignment.Stage.STAGE_2
+        )
+        if stage2_assignments.exists() and not ProposalService.check_stage2_completion(proposal):
+            raise ValueError("Not all Stage 2 reviews are complete")
+
         # Create final decision record
         final_decision = FinalDecision.objects.create(
             proposal=proposal,
@@ -386,13 +418,36 @@ class ReviewerService:
 
 class EmailService:
     """Handles email notifications for the grant system."""
+
+    @staticmethod
+    def _get_from_email():
+        from django.conf import settings
+        return settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@nsu.edu'
+
+    @staticmethod
+    def _send_email(subject, message, recipient_list):
+        from django.core.mail import send_mail
+
+        if not recipient_list:
+            logger.warning("Email not sent: empty recipient list for subject '%s'", subject)
+            return False
+
+        try:
+            sent_count = send_mail(
+                subject=subject,
+                message=message,
+                from_email=EmailService._get_from_email(),
+                recipient_list=recipient_list,
+                fail_silently=False
+            )
+            return sent_count > 0
+        except Exception:
+            logger.exception("Email send failed for subject '%s'", subject)
+            return False
     
     @staticmethod
     def send_reviewer_assignment_email(assignment):
         """Send email to reviewer about new assignment."""
-        from django.core.mail import send_mail
-        from django.conf import settings
-        
         subject = f"New Review Assignment: {assignment.proposal.proposal_code}"
         message = f"""
 Dear {assignment.reviewer.get_full_name() or assignment.reviewer.username},
@@ -409,28 +464,21 @@ Please log in to the system to complete your review.
 Best regards,
 CTRG Grant Review System
         """
-        
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@nsu.edu',
-                [assignment.reviewer.email],
-                fail_silently=True
-            )
+
+        sent = EmailService._send_email(
+            subject=subject,
+            message=message,
+            recipient_list=[assignment.reviewer.email]
+        )
+        if sent:
             assignment.notification_sent = True
-            assignment.save()
+            assignment.save(update_fields=['notification_sent'])
             return True
-        except Exception as e:
-            print(f"Email send failed: {e}")
-            return False
+        return False
     
     @staticmethod
     def send_revision_request_email(proposal):
         """Send email to PI about revision request."""
-        from django.core.mail import send_mail
-        from django.conf import settings
-        
         subject = f"Revision Requested: {proposal.proposal_code}"
         message = f"""
 Dear {proposal.pi_name},
@@ -445,26 +493,16 @@ Please log in to the system to view reviewer comments and submit your revised pr
 Best regards,
 CTRG Grant Review System
         """
-        
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@nsu.edu',
-                [proposal.pi_email],
-                fail_silently=True
-            )
-            return True
-        except Exception as e:
-            print(f"Email send failed: {e}")
-            return False
+
+        return EmailService._send_email(
+            subject=subject,
+            message=message,
+            recipient_list=[proposal.pi_email]
+        )
     
     @staticmethod
     def send_final_decision_email(proposal):
         """Send email to PI about final decision."""
-        from django.core.mail import send_mail
-        from django.conf import settings
-        
         decision_text = "ACCEPTED" if proposal.status == Proposal.Status.FINAL_ACCEPTED else "NOT ACCEPTED"
         
         subject = f"Final Decision: {proposal.proposal_code} - {decision_text}"
@@ -482,36 +520,27 @@ Please log in to the system for more details.
 Best regards,
 CTRG Grant Review System
         """
-        
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@nsu.edu',
-                [proposal.pi_email],
-                fail_silently=True
-            )
-            return True
-        except Exception as e:
-            print(f"Email send failed: {e}")
-            return False
+
+        return EmailService._send_email(
+            subject=subject,
+            message=message,
+            recipient_list=[proposal.pi_email]
+        )
     
     @staticmethod
     def send_bulk_email(recipients, subject, message):
         """Send email to multiple recipients."""
         from django.core.mail import send_mass_mail
-        from django.conf import settings
-        
-        from_email = settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@nsu.edu'
+        from_email = EmailService._get_from_email()
         
         messages = [
             (subject, message, from_email, [recipient.email])
             for recipient in recipients
         ]
-        
+
         try:
-            send_mass_mail(messages, fail_silently=True)
-            return True
-        except Exception as e:
-            print(f"Bulk email send failed: {e}")
+            sent_count = send_mass_mail(messages, fail_silently=False)
+            return sent_count > 0
+        except Exception:
+            logger.exception("Bulk email send failed for subject '%s'", subject)
             return False

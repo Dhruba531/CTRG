@@ -72,8 +72,9 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
             'proposal',                    # ForeignKey
             'proposal__cycle',             # Through proposal
             'reviewer',                    # ForeignKey to User
-            'stage1_score',                # OneToOne reverse
-            'stage2_review'                # OneToOne reverse
+        ).prefetch_related(
+            'stage1_score',
+            'stage2_review'
         )
 
         if user.is_staff:

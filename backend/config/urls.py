@@ -16,8 +16,25 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import JsonResponse
+
+
+def root_view(request):
+    """Public root endpoint so backend base URL does not return 404/401."""
+    return JsonResponse({
+        'service': 'CTRG backend',
+        'status': 'ok',
+        'endpoints': {
+            'admin': '/admin/',
+            'auth': '/api/auth/',
+            'api': '/api/',
+        }
+    })
 
 urlpatterns = [
+    # Public root route for quick health/info check
+    path('', root_view, name='root'),
+
     # Django admin interface
     path('admin/', admin.site.urls),
 

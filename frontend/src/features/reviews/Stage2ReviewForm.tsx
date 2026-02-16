@@ -3,7 +3,7 @@
  * For reviewing revised proposals after Stage 1 tentative acceptance.
  * Reviews: concerns addressed, revised recommendation, and comments.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, CheckCircle, XCircle, AlertCircle, Send, Save, Download } from 'lucide-react';
 import { assignmentApi, type ReviewAssignment } from '../../services/api';
@@ -36,11 +36,7 @@ const Stage2ReviewForm: React.FC = () => {
     const [technicalComments, setTechnicalComments] = useState('');
     const [budgetComments, setBudgetComments] = useState('');
 
-    useEffect(() => {
-        loadData();
-    }, [id]);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
             const response = await assignmentApi.getProposalDetails(Number(id));
@@ -65,7 +61,11 @@ const Stage2ReviewForm: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const handleSaveDraft = async () => {
         try {

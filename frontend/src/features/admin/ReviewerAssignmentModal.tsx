@@ -84,7 +84,7 @@ const ReviewerAssignmentModal: React.FC<Props> = ({ proposal, onClose, onSuccess
             await assignmentApi.bulkNotify(assignedIds);
             alert(`Notification sent to ${assignedIds.length} reviewer(s).`);
             onSuccess();
-        } catch (err) {
+        } catch {
             alert('Failed to send notifications.');
         } finally {
             setNotifying(false);

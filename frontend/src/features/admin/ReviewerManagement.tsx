@@ -3,9 +3,9 @@
  * View and manage reviewer profiles and workloads.
  */
 import React, { useState, useEffect } from 'react';
-import { Users, Mail, BarChart3, CheckCircle, XCircle, AlertCircle, Edit2, ToggleLeft, ToggleRight, Plus } from 'lucide-react';
+import { Users, Mail, BarChart3, CheckCircle, XCircle, AlertCircle, Edit2, ToggleLeft, ToggleRight, Plus, Upload } from 'lucide-react';
 import { reviewerApi, type Reviewer } from '../../services/api';
-import { register } from '../../services/authService';
+import { register, importReviewersFromExcel } from '../../services/authService';
 
 const ReviewerManagement: React.FC = () => {
     const [reviewers, setReviewers] = useState<Reviewer[]>([]);
@@ -15,6 +15,8 @@ const ReviewerManagement: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'active' | 'available'>('all');
     const [saving, setSaving] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [excelFile, setExcelFile] = useState<File | null>(null);
+    const [importingExcel, setImportingExcel] = useState(false);
     const [addFormData, setAddFormData] = useState({
         first_name: '',
         last_name: '',
@@ -100,6 +102,7 @@ const ReviewerManagement: React.FC = () => {
             // Refresh list
             await loadReviewers();
             setShowAddModal(false);
+            setExcelFile(null);
             setAddFormData({
                 first_name: '',
                 last_name: '',
@@ -112,6 +115,40 @@ const ReviewerManagement: React.FC = () => {
             alert(err.message || 'Failed to add reviewer');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleExcelImport = async () => {
+        if (!excelFile) {
+            alert('Please choose an .xlsx file first.');
+            return;
+        }
+
+        try {
+            setImportingExcel(true);
+            const token = localStorage.getItem('token') || '';
+            const result = await importReviewersFromExcel(excelFile, token);
+            await loadReviewers();
+
+            const tempPasswords = result.created
+                .filter(item => item.temporary_password)
+                .map(item => `${item.email}: ${item.temporary_password}`)
+                .join('\n');
+
+            let message = `Imported ${result.created_count} reviewer(s).`;
+            if (result.error_count > 0) {
+                message += ` ${result.error_count} row(s) failed.`;
+            }
+            if (tempPasswords) {
+                message += `\n\nTemporary passwords:\n${tempPasswords}`;
+            }
+            alert(message);
+            setExcelFile(null);
+        } catch (err: any) {
+            const apiError = err?.response?.data?.error;
+            alert(apiError || err.message || 'Failed to import reviewers from Excel');
+        } finally {
+            setImportingExcel(false);
         }
     };
 
@@ -141,7 +178,10 @@ const ReviewerManagement: React.FC = () => {
                     <p className="text-gray-500 mt-1">Manage reviewer profiles and track workloads</p>
                 </div>
                 <button
-                    onClick={() => setShowAddModal(true)}
+                    onClick={() => {
+                        setExcelFile(null);
+                        setShowAddModal(true);
+                    }}
                     className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
                 >
                     <Plus size={18} className="mr-2" />
@@ -381,9 +421,33 @@ const ReviewerManagement: React.FC = () => {
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md m-4">
                         <div className="p-6 border-b border-gray-200">
                             <h2 className="text-xl font-semibold text-gray-900">Add New Reviewer</h2>
-                            <p className="text-sm text-gray-500">Create a new reviewer account</p>
+                            <p className="text-sm text-gray-500">Create one reviewer manually or import many from Excel</p>
+                        </div>
+                        <div className="p-6 border-b border-gray-200 space-y-3 bg-gray-50">
+                            <div className="text-sm font-medium text-gray-700">Bulk Import (.xlsx)</div>
+                            <input
+                                type="file"
+                                accept=".xlsx"
+                                onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
+                                className="block w-full text-sm text-gray-600"
+                            />
+                            <div className="flex justify-between items-center">
+                                <p className="text-xs text-gray-500">
+                                    Columns: first_name, last_name, email, username(optional), password(optional)
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleExcelImport}
+                                    disabled={importingExcel || !excelFile}
+                                    className="inline-flex items-center px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                    <Upload size={14} className="mr-2" />
+                                    {importingExcel ? 'Importing...' : 'Import File'}
+                                </button>
+                            </div>
                         </div>
                         <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+                            <div className="text-sm font-medium text-gray-700">Manual Add</div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
@@ -439,7 +503,10 @@ const ReviewerManagement: React.FC = () => {
                             <div className="pt-4 flex justify-end space-x-3">
                                 <button
                                     type="button"
-                                    onClick={() => setShowAddModal(false)}
+                                    onClick={() => {
+                                        setExcelFile(null);
+                                        setShowAddModal(false);
+                                    }}
                                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                                 >
                                     Cancel

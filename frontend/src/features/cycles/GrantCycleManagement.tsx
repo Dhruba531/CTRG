@@ -74,7 +74,7 @@ const GrantCycleManagement: React.FC = () => {
             setShowForm(false);
             setFormData(initialFormData);
             setEditingId(null);
-        } catch (err) {
+        } catch {
             setError('Failed to save grant cycle');
         }
     };
@@ -103,7 +103,7 @@ const GrantCycleManagement: React.FC = () => {
             try {
                 await cycleApi.delete(id);
                 loadCycles();
-            } catch (err) {
+            } catch {
                 setError('Failed to delete grant cycle');
             }
         }

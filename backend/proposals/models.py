@@ -117,9 +117,14 @@ class Proposal(models.Model):
                 cycle_year = year_str.split('-')[0] if '-' in year_str else year_str
             else:
                 cycle_year = str(timezone.now().year)
-            # Count existing proposals in this cycle
-            count = Proposal.objects.filter(cycle=self.cycle).count() + 1
-            self.proposal_code = f"CTRG-{cycle_year}-{count:03d}"
+
+            # Generate sequence across the year (not only within the cycle) to keep proposal_code globally unique.
+            count = Proposal.objects.filter(proposal_code__startswith=f"CTRG-{cycle_year}-").count() + 1
+            proposal_code = f"CTRG-{cycle_year}-{count:03d}"
+            while Proposal.objects.filter(proposal_code=proposal_code).exists():
+                count += 1
+                proposal_code = f"CTRG-{cycle_year}-{count:03d}"
+            self.proposal_code = proposal_code
         super().save(*args, **kwargs)
     
     @property

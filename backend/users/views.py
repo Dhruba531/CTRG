@@ -22,6 +22,7 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from django.contrib.auth import get_user_model
+from django.utils.crypto import get_random_string
 
 from .serializers import (
     UserSerializer,
@@ -34,6 +35,25 @@ from .serializers import (
 
 # Get the custom User model
 User = get_user_model()
+
+
+def _normalize_header(value):
+    return str(value).strip().lower().replace(' ', '_') if value is not None else ''
+
+
+def _generate_unique_username(email):
+    base = email.split('@')[0].strip().lower().replace(' ', '.') or 'reviewer'
+    candidate = base
+    suffix = 1
+    while User.objects.filter(username=candidate).exists():
+        candidate = f"{base}{suffix}"
+        suffix += 1
+    return candidate
+
+
+def _generate_temp_password():
+    # Meets minimum length and avoids common-password/numeric-only failures.
+    return f"Rvwr!{get_random_string(10)}"
 
 
 class LoginView(ObtainAuthToken):
@@ -262,6 +282,119 @@ class UserRegistrationView(generics.CreateAPIView):
 
         # Log user creation for audit trail
         # Note: Could extend this to log to AuditLog model if needed
+
+
+class ImportReviewersFromExcelView(APIView):
+    """
+    Import reviewer accounts from an Excel file (.xlsx).
+
+    Expected header columns:
+    - email (required)
+    - first_name (required)
+    - last_name (required)
+    - username (optional, auto-generated if missing)
+    - password (optional, temporary password auto-generated if missing)
+    """
+
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def post(self, request):
+        upload = request.FILES.get('file')
+        if not upload:
+            return Response({'error': 'No file uploaded. Provide file in form-data key "file".'}, status=status.HTTP_400_BAD_REQUEST)
+
+        filename = (upload.name or '').lower()
+        if not filename.endswith('.xlsx'):
+            return Response({'error': 'Unsupported file type. Please upload an .xlsx file.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from openpyxl import load_workbook
+            workbook = load_workbook(filename=upload, data_only=True)
+            sheet = workbook.active
+        except Exception:
+            return Response({'error': 'Unable to read Excel file. Ensure the file is a valid .xlsx workbook.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows:
+            return Response({'error': 'The Excel file is empty.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        header = [_normalize_header(cell) for cell in rows[0]]
+        aliases = {
+            'first_name': {'first_name', 'firstname', 'first'},
+            'last_name': {'last_name', 'lastname', 'last'},
+            'email': {'email', 'email_address', 'mail'},
+            'username': {'username', 'user_name', 'user'},
+            'password': {'password', 'pass', 'temp_password'},
+        }
+
+        index_map = {}
+        for field, names in aliases.items():
+            for idx, col in enumerate(header):
+                if col in names:
+                    index_map[field] = idx
+                    break
+
+        required = ['first_name', 'last_name', 'email']
+        missing = [field for field in required if field not in index_map]
+        if missing:
+            return Response(
+                {'error': f"Missing required columns: {', '.join(missing)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created = []
+        errors = []
+
+        for row_idx, row in enumerate(rows[1:], start=2):
+            if not row or all(cell is None or str(cell).strip() == '' for cell in row):
+                continue
+
+            def _cell(field):
+                idx = index_map.get(field)
+                if idx is None or idx >= len(row):
+                    return ''
+                return str(row[idx]).strip() if row[idx] is not None else ''
+
+            first_name = _cell('first_name')
+            last_name = _cell('last_name')
+            email = _cell('email')
+            username = _cell('username') or _generate_unique_username(email)
+            password = _cell('password') or _generate_temp_password()
+
+            payload = {
+                'username': username,
+                'email': email,
+                'password': password,
+                'first_name': first_name,
+                'last_name': last_name,
+                'role': 'Reviewer',
+            }
+
+            serializer = UserCreateSerializer(data=payload)
+            if serializer.is_valid():
+                user = serializer.save()
+                created_row = {
+                    'row': row_idx,
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                }
+                if 'password' not in index_map or not _cell('password'):
+                    created_row['temporary_password'] = password
+                created.append(created_row)
+            else:
+                errors.append({
+                    'row': row_idx,
+                    'email': email,
+                    'errors': serializer.errors,
+                })
+
+        return Response({
+            'created_count': len(created),
+            'error_count': len(errors),
+            'created': created,
+            'errors': errors,
+        }, status=status.HTTP_200_OK)
 
 
 class ChangePasswordView(APIView):
@@ -517,31 +650,57 @@ class PendingReviewersView(generics.ListAPIView):
 
 class ApproveReviewerView(APIView):
     """
-    Approve a pending reviewer registration (Admin only).
+    ============================================================================
+    APPROVE PENDING REVIEWER REGISTRATION
+    ============================================================================
 
-    POST /api/auth/approve-reviewer/<id>/
+    PURPOSE:
+    Activates a pending reviewer account, allowing them to login and review
+    proposals.
 
-    Activates a pending reviewer account, allowing them to login.
+    ENDPOINT: POST /api/auth/approve-reviewer/<id>/
 
-    Success Response (200 OK):
+    WHAT IT DOES:
+    1. Validates user exists and is a pending reviewer
+    2. Sets User.is_active = True (enables login)
+    3. Sets ReviewerProfile.is_active_reviewer = True (enables assignments)
+    4. Returns success message with user data
+
+    VALIDATION:
+    - User must exist
+    - User must be in "Reviewer" group
+    - User must be inactive (is_active=False)
+    - Cannot approve already active reviewers
+
+    PERMISSIONS:
+    - Requires authentication (token)
+    - Requires admin status (is_staff=True or SRC_Chair group)
+
+    SUCCESS RESPONSE (200 OK):
         {
             "message": "Reviewer approved successfully.",
             "user": {
                 "id": 1,
                 "username": "john.reviewer",
                 "email": "john.reviewer@nsu.edu",
-                "is_active": true
+                "first_name": "John",
+                "last_name": "Reviewer",
+                "is_active": true,
+                "role": "Reviewer"
             }
         }
 
-    Error Responses:
-        - 400 Bad Request: User is already active
+    ERROR RESPONSES:
+        - 400 Bad Request: User is already active or not a reviewer
         - 401 Unauthorized: Not authenticated
         - 403 Forbidden: Not an admin user
         - 404 Not Found: User does not exist
 
-    Authentication: Required (Token)
-    Permissions: Admin users only (is_staff=True)
+    EXAMPLE:
+        POST /api/auth/approve-reviewer/5/
+        Authorization: Token abc123...
+
+        Response: {"message": "Reviewer approved successfully.", "user": {...}}
     """
 
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
@@ -550,13 +709,25 @@ class ApproveReviewerView(APIView):
         """
         Approve pending reviewer and activate their account.
 
+        WORKFLOW:
+        1. Fetch user by ID
+        2. Validate user is in Reviewer group
+        3. Check if already active (prevent duplicate approvals)
+        4. Set User.is_active = True
+        5. Set ReviewerProfile.is_active_reviewer = True
+        6. Return success response
+
         Args:
-            request: HTTP request
-            pk: User ID
+            request: HTTP request with authentication token
+            pk: User ID (primary key)
 
         Returns:
-            Response: Success message and user data
+            Response: Success message and serialized user data (200 OK)
+                     OR error message (400/404)
         """
+        # ====================================================================
+        # STEP 1: Fetch user and validate existence
+        # ====================================================================
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
@@ -565,33 +736,51 @@ class ApproveReviewerView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check if user is in Reviewer group
+        # ====================================================================
+        # STEP 2: Validate user is in Reviewer group
+        # ====================================================================
+        # Safety check: Only approve users who are actually reviewers
         if not user.groups.filter(name='Reviewer').exists():
             return Response(
                 {'error': 'User is not a reviewer.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if already active
+        # ====================================================================
+        # STEP 3: Check if already active
+        # ====================================================================
+        # Prevent duplicate approvals (idempotency check)
         if user.is_active:
             return Response(
                 {'error': 'Reviewer is already approved.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Activate user account
+        # ====================================================================
+        # STEP 4: Activate user account
+        # ====================================================================
+        # Setting is_active=True enables login functionality
         user.is_active = True
         user.save()
 
-        # Activate reviewer profile
+        # ====================================================================
+        # STEP 5: Activate reviewer profile
+        # ====================================================================
+        # ReviewerProfile must also be activated to receive review assignments
         try:
             from reviews.models import ReviewerProfile
             reviewer_profile = ReviewerProfile.objects.get(user=user)
             reviewer_profile.is_active_reviewer = True
             reviewer_profile.save()
-        except:
-            pass  # Profile might not exist
+        except ReviewerProfile.DoesNotExist:
+            # Profile doesn't exist - this shouldn't happen in normal flow
+            # (created automatically during registration)
+            # Handle gracefully - approval still succeeds
+            pass
 
+        # ====================================================================
+        # STEP 6: Return success response
+        # ====================================================================
         serializer = UserSerializer(user)
         return Response({
             'message': 'Reviewer approved successfully.',
@@ -601,25 +790,52 @@ class ApproveReviewerView(APIView):
 
 class RejectReviewerView(APIView):
     """
-    Reject a pending reviewer registration (Admin only).
+    ============================================================================
+    REJECT PENDING REVIEWER REGISTRATION
+    ============================================================================
 
-    DELETE /api/auth/reject-reviewer/<id>/
+    PURPOSE:
+    Permanently deletes a pending reviewer account, rejecting their registration.
 
-    Deletes a pending reviewer account, rejecting their registration.
+    ENDPOINT: DELETE /api/auth/reject-reviewer/<id>/
 
-    Success Response (200 OK):
+    WHAT IT DOES:
+    1. Validates user exists and is a pending reviewer
+    2. PERMANENTLY DELETES the user account
+    3. CASCADE DELETES associated ReviewerProfile
+    4. Returns success message
+
+    ⚠️ WARNING: This is a DESTRUCTIVE operation!
+    - User account is permanently deleted
+    - Cannot be undone
+    - User must re-register if rejected by mistake
+
+    VALIDATION & SAFETY:
+    - User must exist
+    - User must be in "Reviewer" group
+    - User must be INACTIVE (is_active=False)
+    - CANNOT reject active reviewers (safety check)
+
+    PERMISSIONS:
+    - Requires authentication (token)
+    - Requires admin status (is_staff=True or SRC_Chair group)
+
+    SUCCESS RESPONSE (200 OK):
         {
             "message": "Reviewer registration rejected."
         }
 
-    Error Responses:
-        - 400 Bad Request: Cannot reject active reviewer
+    ERROR RESPONSES:
+        - 400 Bad Request: User is active or not a reviewer
         - 401 Unauthorized: Not authenticated
         - 403 Forbidden: Not an admin user
         - 404 Not Found: User does not exist
 
-    Authentication: Required (Token)
-    Permissions: Admin users only (is_staff=True)
+    EXAMPLE:
+        DELETE /api/auth/reject-reviewer/5/
+        Authorization: Token abc123...
+
+        Response: {"message": "Reviewer registration rejected."}
     """
 
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
@@ -628,13 +844,23 @@ class RejectReviewerView(APIView):
         """
         Reject pending reviewer registration by deleting the account.
 
+        WORKFLOW:
+        1. Fetch user by ID
+        2. Validate user is in Reviewer group
+        3. Check user is inactive (prevent deleting active reviewers)
+        4. Delete user account (CASCADE deletes ReviewerProfile)
+        5. Return success response
+
         Args:
-            request: HTTP request
-            pk: User ID
+            request: HTTP request with authentication token
+            pk: User ID (primary key)
 
         Returns:
-            Response: Success message
+            Response: Success message (200 OK) OR error message (400/404)
         """
+        # ====================================================================
+        # STEP 1: Fetch user and validate existence
+        # ====================================================================
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
@@ -643,23 +869,38 @@ class RejectReviewerView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check if user is in Reviewer group
+        # ====================================================================
+        # STEP 2: Validate user is in Reviewer group
+        # ====================================================================
+        # Safety check: Only reject reviewer accounts
         if not user.groups.filter(name='Reviewer').exists():
             return Response(
                 {'error': 'User is not a reviewer.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Prevent deletion of active reviewers (safety check)
+        # ====================================================================
+        # STEP 3: CRITICAL SAFETY CHECK - Prevent deletion of active users
+        # ====================================================================
+        # This prevents accidentally deleting reviewers who are already
+        # approved and working in the system
         if user.is_active:
             return Response(
                 {'error': 'Cannot reject an active reviewer. Use the deactivate endpoint instead.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Delete the user account
+        # ====================================================================
+        # STEP 4: DELETE user account (DESTRUCTIVE - Cannot be undone!)
+        # ====================================================================
+        # Django's cascade deletion will also delete:
+        # - ReviewerProfile (ForeignKey to User)
+        # - Any other related objects
         user.delete()
 
+        # ====================================================================
+        # STEP 5: Return success response
+        # ====================================================================
         return Response(
             {'message': 'Reviewer registration rejected.'},
             status=status.HTTP_200_OK

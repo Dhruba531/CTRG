@@ -156,8 +156,8 @@ class FinalDecisionCreateSerializer(serializers.Serializer):
 
 class AuditLogSerializer(serializers.ModelSerializer):
     """Serializer for Audit Logs."""
-    user_email = serializers.EmailField(source='user.email', read_only=True)
-    proposal_code = serializers.CharField(source='proposal.proposal_code', read_only=True)
+    user_email = serializers.SerializerMethodField()
+    proposal_code = serializers.SerializerMethodField()
     
     class Meta:
         model = AuditLog
@@ -165,6 +165,12 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'id', 'user', 'user_email', 'action_type', 
             'proposal', 'proposal_code', 'timestamp', 'details'
         ]
+
+    def get_user_email(self, obj):
+        return obj.user.email if obj.user else None
+
+    def get_proposal_code(self, obj):
+        return obj.proposal.proposal_code if obj.proposal else None
 
 
 class DashboardStatsSerializer(serializers.Serializer):
