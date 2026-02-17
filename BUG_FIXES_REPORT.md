@@ -114,7 +114,7 @@ catch (error: any) {
 ## Testing Results
 
 ### Backend Tests ✓ ALL PASSED
-Ran automated test script `test_reviewer_registration.py`:
+Ran automated test script `scripts/reviewer_registration_debug.py`:
 
 1. ✓ Inactive reviewer account creation
 2. ✓ Inactive user authentication blocking
@@ -202,7 +202,7 @@ All identified bugs have been fixed and tested. The reviewer registration and ap
 8. `frontend/src/components/DashboardLayout.tsx` - Added navigation link
 
 ### Testing
-9. `backend/test_reviewer_registration.py` - NEW FILE - Automated test suite
+9. `backend/scripts/reviewer_registration_debug.py` - NEW FILE - Automated test suite
 
 ---
 

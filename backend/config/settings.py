@@ -17,6 +17,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 from celery.schedules import crontab
 import environ
@@ -27,6 +28,7 @@ import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+RUNNING_TESTS = 'test' in sys.argv
 
 # Initialize environment variable reader
 env = environ.Env(
@@ -127,9 +129,17 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ========================================
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Force SQLite during test runs so local/CI tests do not require a PostgreSQL driver.
+if RUNNING_TESTS:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+    }
 # PostgreSQL is the default/original database (production-first setup).
 # SQLite is only used if explicitly configured.
-if env('DATABASE_ENGINE') == 'django.db.backends.sqlite3':
+elif env('DATABASE_ENGINE') == 'django.db.backends.sqlite3':
     DATABASES = {
         'default': {
             'ENGINE': env('DATABASE_ENGINE'),

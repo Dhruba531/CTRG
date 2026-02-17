@@ -637,9 +637,9 @@ class ReviewerRegistrationSerializer(serializers.ModelSerializer):
 ## 🧪 Testing
 
 ### Automated Test Suite
-**File:** `backend/test_reviewer_registration.py`
+**File:** `backend/scripts/reviewer_registration_debug.py`
 
-**Run:** `./venv/bin/python test_reviewer_registration.py`
+**Run:** `python scripts/reviewer_registration_debug.py`
 
 **Tests:**
 1. ✅ Inactive reviewer account creation
