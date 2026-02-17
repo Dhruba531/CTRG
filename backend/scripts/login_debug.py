@@ -5,12 +5,11 @@ import os
 
 def main():
     import django
-    from django.test import RequestFactory
-    from users.serializers import LoginSerializer
-
-    # Setup Django only when running this script directly.
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     django.setup()
+
+    from django.test import RequestFactory
+    from users.serializers import LoginSerializer
 
     # Create a fake request
     factory = RequestFactory()

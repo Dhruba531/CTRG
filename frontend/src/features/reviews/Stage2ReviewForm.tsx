@@ -215,21 +215,21 @@ const Stage2ReviewForm: React.FC = () => {
                 </h2>
                 <div className="grid grid-cols-3 gap-4">
                     {[
-                        { value: 'YES', label: 'Yes', desc: 'All concerns fully addressed', icon: CheckCircle, color: 'green' },
-                        { value: 'PARTIALLY', label: 'Partially', desc: 'Some concerns remain', icon: AlertCircle, color: 'yellow' },
-                        { value: 'NO', label: 'No', desc: 'Concerns not addressed', icon: XCircle, color: 'red' },
+                        { value: 'YES', label: 'Yes', desc: 'All concerns fully addressed', icon: CheckCircle, activeBorder: 'border-green-500', activeBg: 'bg-green-50', activeText: 'text-green-600' },
+                        { value: 'PARTIALLY', label: 'Partially', desc: 'Some concerns remain', icon: AlertCircle, activeBorder: 'border-yellow-500', activeBg: 'bg-yellow-50', activeText: 'text-yellow-600' },
+                        { value: 'NO', label: 'No', desc: 'Concerns not addressed', icon: XCircle, activeBorder: 'border-red-500', activeBg: 'bg-red-50', activeText: 'text-red-600' },
                     ].map((option) => (
                         <button
                             key={option.value}
                             onClick={() => setConcernsAddressed(option.value as any)}
                             className={`p-4 rounded-xl border-2 transition-all ${concernsAddressed === option.value
-                                ? `border-${option.color}-500 bg-${option.color}-50`
+                                ? `${option.activeBorder} ${option.activeBg}`
                                 : 'border-gray-200 hover:border-gray-300'
                                 }`}
                         >
                             <option.icon
                                 size={32}
-                                className={`mx-auto mb-2 ${concernsAddressed === option.value ? `text-${option.color}-600` : 'text-gray-400'
+                                className={`mx-auto mb-2 ${concernsAddressed === option.value ? option.activeText : 'text-gray-400'
                                     }`}
                             />
                             <div className="font-medium text-gray-900">{option.label}</div>

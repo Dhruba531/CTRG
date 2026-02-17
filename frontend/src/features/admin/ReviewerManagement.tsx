@@ -153,14 +153,15 @@ const ReviewerManagement: React.FC = () => {
     };
 
     const getWorkloadColor = (current: number, max: number) => {
+        if (max <= 0) return 'text-gray-600';
         const ratio = current / max;
-        if (ratio >= 1) return 'text-red-600 bg-red-100';
-        if (ratio >= 0.7) return 'text-yellow-600 bg-yellow-100';
-        return 'text-green-600 bg-green-100';
+        if (ratio >= 1) return 'text-red-600';
+        if (ratio >= 0.7) return 'text-yellow-600';
+        return 'text-green-600';
     };
 
     const getWorkloadBar = (current: number, max: number) => {
-        const percentage = Math.min((current / max) * 100, 100);
+        const percentage = max > 0 ? Math.min((current / max) * 100, 100) : 0;
         const color = percentage >= 100 ? 'bg-red-500' : percentage >= 70 ? 'bg-yellow-500' : 'bg-green-500';
         return (
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">

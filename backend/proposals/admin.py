@@ -24,7 +24,7 @@ class ProposalAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('proposal_code', 'title', 'abstract', 'cycle', 'status')
+            'fields': ('proposal_code', 'title', 'abstract', 'cycle', 'status', 'is_locked')
         }),
         ('PI Information', {
             'fields': ('pi_name', 'pi_department', 'pi_email', 'co_investigators')

@@ -56,7 +56,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'is_staff']
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'is_staff']
 
     def get_role(self, obj):
         """

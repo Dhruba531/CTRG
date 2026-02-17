@@ -24,9 +24,9 @@ def check_revision_deadlines():
     for proposal in proposals:
         if ProposalService.check_revision_deadline(proposal):
             count += 1
-            # Optionally send notification
+            # Send deadline missed notification
             try:
-                EmailService.send_final_decision_email(proposal)
+                EmailService.send_revision_request_email(proposal)
             except Exception:
                 pass
     

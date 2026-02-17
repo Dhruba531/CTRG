@@ -78,11 +78,11 @@ class ProposalSerializer(serializers.ModelSerializer):
             'revised_proposal_file', 'response_to_reviewers_file',
             'cycle', 'cycle_name', 'status', 'status_display',
             'created_at', 'submitted_at', 'updated_at', 'revision_deadline',
-            'is_revision_overdue'
+            'is_revision_overdue', 'is_locked'
         ]
         read_only_fields = [
-            'proposal_code', 'status', 'created_at', 'submitted_at', 
-            'updated_at', 'revision_deadline'
+            'proposal_code', 'status', 'created_at', 'submitted_at',
+            'updated_at', 'revision_deadline', 'is_locked'
         ]
     
     def validate(self, data):

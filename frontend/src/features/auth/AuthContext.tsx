@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const logout = () => {
-        authService.logout();
+        authService.logout().catch(() => {});
         setToken(null);
         setRole(null);
         setUser(null);

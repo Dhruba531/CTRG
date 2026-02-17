@@ -67,27 +67,14 @@ const SRCChairDashboard: React.FC = () => {
             setStats(statsRes.data);
             setRecentProposals(proposalsRes.data.slice(0, 5));
         } catch {
-            // Mock data
             setStats({
-                total_proposals: 24,
-                pending_reviews: 8,
-                awaiting_decision: 5,
-                awaiting_revision: 3,
-                status_breakdown: {
-                    SUBMITTED: 4,
-                    UNDER_STAGE_1_REVIEW: 8,
-                    TENTATIVELY_ACCEPTED: 3,
-                    REVISION_REQUESTED: 3,
-                    UNDER_STAGE_2_REVIEW: 2,
-                    FINAL_ACCEPTED: 3,
-                    FINAL_REJECTED: 1,
-                }
+                total_proposals: 0,
+                pending_reviews: 0,
+                awaiting_decision: 0,
+                awaiting_revision: 0,
+                status_breakdown: {}
             });
-            setRecentProposals([
-                { id: 1, proposal_code: 'CTRG-2025-001', title: 'AI for Climate Change Prediction', pi_name: 'Dr. John Smith', pi_department: 'Computer Science', pi_email: '', fund_requested: 50000, cycle: 1, cycle_name: 'Spring 2025', status: 'UNDER_STAGE_1_REVIEW', status_display: 'Under Stage 1 Review', created_at: '2025-02-01', abstract: '' },
-                { id: 2, proposal_code: 'CTRG-2025-002', title: 'Blockchain in Healthcare Records', pi_name: 'Dr. Sarah Jones', pi_department: 'Information Systems', pi_email: '', fund_requested: 45000, cycle: 1, cycle_name: 'Spring 2025', status: 'REVISION_REQUESTED', status_display: 'Revision Requested', created_at: '2025-01-28', revision_deadline: '2025-02-15', abstract: '' },
-                { id: 3, proposal_code: 'CTRG-2025-003', title: 'Quantum Computing Applications', pi_name: 'Dr. Wei Chen', pi_department: 'Physics', pi_email: '', fund_requested: 75000, cycle: 1, cycle_name: 'Spring 2025', status: 'SUBMITTED', status_display: 'Submitted', created_at: '2025-01-25', abstract: '' },
-            ]);
+            setRecentProposals([]);
         } finally {
             setLoading(false);
         }
@@ -100,10 +87,10 @@ const SRCChairDashboard: React.FC = () => {
     };
 
     const statusCards = [
-        { label: 'Total Proposals', value: stats?.total_proposals || 0, icon: FileText, color: 'blue', bgColor: 'bg-blue-500' },
-        { label: 'Pending Reviews', value: stats?.pending_reviews || 0, icon: Clock, color: 'yellow', bgColor: 'bg-yellow-500' },
-        { label: 'Awaiting Decision', value: stats?.awaiting_decision || 0, icon: AlertTriangle, color: 'purple', bgColor: 'bg-purple-500' },
-        { label: 'Awaiting Revision', value: stats?.awaiting_revision || 0, icon: RefreshCw, color: 'orange', bgColor: 'bg-orange-500' },
+        { label: 'Total Proposals', value: stats?.total_proposals || 0, icon: FileText, bgColor: 'bg-blue-500', cssColor: '#3b82f6' },
+        { label: 'Pending Reviews', value: stats?.pending_reviews || 0, icon: Clock, bgColor: 'bg-yellow-500', cssColor: '#eab308' },
+        { label: 'Awaiting Decision', value: stats?.awaiting_decision || 0, icon: AlertTriangle, bgColor: 'bg-purple-500', cssColor: '#a855f7' },
+        { label: 'Awaiting Revision', value: stats?.awaiting_revision || 0, icon: RefreshCw, bgColor: 'bg-orange-500', cssColor: '#f97316' },
     ];
 
     const quickActions = [
@@ -178,7 +165,7 @@ const SRCChairDashboard: React.FC = () => {
                     <div key={idx} className="relative bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-lg hover:scale-[1.02] transition-all overflow-hidden">
                         {/* Decorative background */}
                         <div className="absolute top-0 right-0 w-32 h-32 opacity-10">
-                            <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-2xl" style={{ backgroundColor: card.bgColor.replace('bg-', '') }} />
+                            <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-2xl" style={{ backgroundColor: card.cssColor }} />
                         </div>
 
                         {/* Left accent bar */}

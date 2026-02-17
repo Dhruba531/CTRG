@@ -112,8 +112,6 @@ class ProposalViewSet(viewsets.ModelViewSet):
             'cycle',          # ForeignKey to GrantCycle
             'stage1_decision',  # Reverse OneToOne to Stage1Decision
             'final_decision'    # Reverse OneToOne to FinalDecision
-        ).prefetch_related(
-            'review_assignments',  # Reverse FK to ReviewAssignments
         )
 
         # Admin sees all
@@ -135,11 +133,15 @@ class ProposalViewSet(viewsets.ModelViewSet):
         """Create a proposal with auto-filled PI info from user."""
         proposal = serializer.save()
         # Set PI information from user profile if not provided
+        changed = False
         if not proposal.pi_name:
             proposal.pi_name = self.request.user.get_full_name() or self.request.user.username
+            changed = True
         if not proposal.pi_email:
             proposal.pi_email = self.request.user.email
-        proposal.save()
+            changed = True
+        if changed:
+            proposal.save()
 
     @action(detail=False, methods=['get'])
     def my_proposals(self, request):

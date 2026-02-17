@@ -72,7 +72,7 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
             'proposal',                    # ForeignKey
             'proposal__cycle',             # Through proposal
             'reviewer',                    # ForeignKey to User
-        ).prefetch_related(
+        ).select_related(
             'stage1_score',
             'stage2_review'
         )

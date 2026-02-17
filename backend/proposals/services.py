@@ -4,7 +4,7 @@ Handles proposal lifecycle, status transitions, and notifications.
 """
 import logging
 from django.utils import timezone
-from django.db.models import Avg
+
 from decimal import Decimal
 from datetime import timedelta
 from .models import Proposal, Stage1Decision, FinalDecision, AuditLog
@@ -168,8 +168,6 @@ class ProposalService:
             proposal.response_to_reviewers_file = response_file
         
         proposal.status = Proposal.Status.REVISED_PROPOSAL_SUBMITTED
-        # Immediately move to Stage 2 review as per required flow
-        proposal.status = Proposal.Status.UNDER_STAGE_2_REVIEW
         proposal.save()
         
         AuditLog.objects.create(

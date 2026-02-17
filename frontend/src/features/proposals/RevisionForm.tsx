@@ -30,23 +30,8 @@ const RevisionForm: React.FC = () => {
             const response = await proposalApi.getById(Number(id));
             setProposal(response.data);
         } catch {
-            // Mock data
-            setProposal({
-                id: Number(id),
-                proposal_code: 'CTRG-2025-005',
-                title: 'Machine Learning in Drug Discovery',
-                pi_name: 'Dr. John Smith',
-                pi_department: 'Computer Science',
-                pi_email: 'smith@nsu.edu',
-                fund_requested: 75000,
-                cycle: 1,
-                cycle_name: 'Spring 2025',
-                status: 'REVISION_REQUESTED',
-                status_display: 'Revision Requested',
-                created_at: '2025-01-15',
-                revision_deadline: '2025-02-28',
-                abstract: 'Research on ML applications in pharmaceutical research.',
-            });
+            setError('Failed to load proposal. Please try again.');
+            setProposal(null);
         } finally {
             setLoading(false);
         }
