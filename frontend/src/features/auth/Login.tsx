@@ -229,9 +229,9 @@ const Login: React.FC = () => {
                                         />
                                         <span className="text-[#425274]">Remember me</span>
                                     </label>
-                                    <a href="#" className="font-semibold text-[#1e2a4a] transition-colors hover:text-[#b8850c]">
-                                        Forgot password?
-                                    </a>
+                                    <span className="text-sm text-[#425274]">
+                                        Forgot password? Contact your administrator.
+                                    </span>
                                 </div>
 
                                 <button

@@ -7,6 +7,7 @@ import logging
 from xml.sax.saxutils import escape
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Count, Q
 from django.utils import timezone
 
 
@@ -155,9 +156,12 @@ def generate_combined_review_pdf(proposal):
             story.append(Paragraph(f"<b>Recommendation:</b> {_safe_text(review.get_revised_recommendation_display())}", styles['Normal']))
             if review.revised_score is not None:
                 story.append(Paragraph(f"<b>Revised Score:</b> {_safe_text(review.revised_score)}%", styles['Normal']))
-            if review.comments:
-                story.append(Paragraph(f"<b>Comments:</b>", styles['Normal']))
-                story.append(Paragraph(_safe_text(review.comments), styles['Normal']))
+            if review.technical_comments:
+                story.append(Paragraph(f"<b>Technical Comments:</b>", styles['Normal']))
+                story.append(Paragraph(_safe_text(review.technical_comments), styles['Normal']))
+            if review.budget_comments:
+                story.append(Paragraph(f"<b>Budget Comments:</b>", styles['Normal']))
+                story.append(Paragraph(_safe_text(review.budget_comments), styles['Normal']))
         except ObjectDoesNotExist:
             story.append(Paragraph("Review data not available", styles['Normal']))
         except Exception:
@@ -217,19 +221,41 @@ def generate_summary_report(cycle):
     story.append(Spacer(1, 20))
     
     proposals = cycle.proposals.all()
-    
-    # Statistics
+    total_count = proposals.count()
+
+    # Status counts
+    submitted_count = proposals.filter(status=Proposal.Status.SUBMITTED).count()
+    under_s1_count = proposals.filter(status=Proposal.Status.UNDER_STAGE_1_REVIEW).count()
+    s1_rejected_count = proposals.filter(status=Proposal.Status.STAGE_1_REJECTED).count()
+    accepted_no_corr_count = proposals.filter(status=Proposal.Status.ACCEPTED_NO_CORRECTIONS).count()
+    tentatively_count = proposals.filter(status=Proposal.Status.TENTATIVELY_ACCEPTED).count()
+    revision_req_count = proposals.filter(status=Proposal.Status.REVISION_REQUESTED).count()
+    revised_count = proposals.filter(status=Proposal.Status.REVISED_PROPOSAL_SUBMITTED).count()
+    under_s2_count = proposals.filter(status=Proposal.Status.UNDER_STAGE_2_REVIEW).count()
+    final_accepted_count = proposals.filter(status=Proposal.Status.FINAL_ACCEPTED).count()
+    final_rejected_count = proposals.filter(status=Proposal.Status.FINAL_REJECTED).count()
+
+    # Acceptance rates
+    s1_decided = s1_rejected_count + accepted_no_corr_count + tentatively_count + final_accepted_count + final_rejected_count
+    s1_accepted = accepted_no_corr_count + tentatively_count + final_accepted_count
+    s1_rate = f"{(s1_accepted / s1_decided * 100):.1f}%" if s1_decided > 0 else "N/A"
+
+    final_decided = final_accepted_count + final_rejected_count
+    final_rate = f"{(final_accepted_count / final_decided * 100):.1f}%" if final_decided > 0 else "N/A"
+
+    # Statistics table
     stats = [
         ['Status', 'Count'],
-        ['Total Proposals', proposals.count()],
-        ['Submitted', proposals.filter(status=Proposal.Status.SUBMITTED).count()],
-        ['Under Stage 1 Review', proposals.filter(status=Proposal.Status.UNDER_STAGE_1_REVIEW).count()],
-        ['Stage 1 Rejected', proposals.filter(status=Proposal.Status.STAGE_1_REJECTED).count()],
-        ['Tentatively Accepted', proposals.filter(status=Proposal.Status.TENTATIVELY_ACCEPTED).count()],
-        ['Final Accepted', proposals.filter(status=Proposal.Status.FINAL_ACCEPTED).count()],
-        ['Final Rejected', proposals.filter(status=Proposal.Status.FINAL_REJECTED).count()],
+        ['Total Proposals', str(total_count)],
+        ['Submitted', str(submitted_count)],
+        ['Under Stage 1 Review', str(under_s1_count)],
+        ['Stage 1 Rejected', str(s1_rejected_count)],
+        ['Accepted (No Corrections)', str(accepted_no_corr_count)],
+        ['Tentatively Accepted', str(tentatively_count)],
+        ['Final Accepted', str(final_accepted_count)],
+        ['Final Rejected', str(final_rejected_count)],
     ]
-    
+
     table = Table(stats, colWidths=[3*inch, 1.5*inch])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -238,7 +264,82 @@ def generate_summary_report(cycle):
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     story.append(table)
-    
+    story.append(Spacer(1, 15))
+
+    # Acceptance Rates
+    story.append(Paragraph("Acceptance Rates", styles['Heading2']))
+    story.append(Spacer(1, 8))
+
+    rates_data = [
+        ['Metric', 'Value'],
+        ['Stage 1 Acceptance Rate', s1_rate],
+        ['Final Acceptance Rate', final_rate],
+    ]
+    rates_table = Table(rates_data, colWidths=[3*inch, 1.5*inch])
+    rates_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+        ('FONTNAME', (1, 1), (-1, -1), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(rates_table)
+    story.append(Spacer(1, 20))
+
+    # Reviewer Workload Breakdown
+    story.append(Paragraph("Reviewer Workload Summary", styles['Heading2']))
+    story.append(Spacer(1, 8))
+
+    from reviews.models import ReviewAssignment, ReviewerProfile
+
+    reviewer_profiles = ReviewerProfile.objects.select_related('user').filter(
+        user__review_assignments__proposal__cycle=cycle
+    ).annotate(
+        s1_count=Count('user__review_assignments', filter=Q(
+            user__review_assignments__stage=ReviewAssignment.Stage.STAGE_1,
+            user__review_assignments__proposal__cycle=cycle,
+        )),
+        s2_count=Count('user__review_assignments', filter=Q(
+            user__review_assignments__stage=ReviewAssignment.Stage.STAGE_2,
+            user__review_assignments__proposal__cycle=cycle,
+        )),
+        total=Count('user__review_assignments', filter=Q(
+            user__review_assignments__proposal__cycle=cycle,
+        )),
+        pending=Count('user__review_assignments', filter=Q(
+            user__review_assignments__status=ReviewAssignment.Status.PENDING,
+            user__review_assignments__proposal__cycle=cycle,
+        )),
+    ).distinct()
+
+    workload_data = [['Reviewer', 'Department', 'Stage 1', 'Stage 2', 'Total', 'Pending']]
+
+    for profile in reviewer_profiles:
+        if profile.total > 0:
+            reviewer_name = profile.user.get_full_name() or profile.user.username
+            workload_data.append([
+                _safe_text(reviewer_name),
+                _safe_text(profile.department),
+                str(profile.s1_count),
+                str(profile.s2_count),
+                str(profile.total),
+                str(profile.pending),
+            ])
+
+    if len(workload_data) > 1:
+        workload_table = Table(workload_data, colWidths=[1.8*inch, 1.2*inch, 0.6*inch, 0.6*inch, 0.6*inch, 0.7*inch])
+        workload_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        story.append(workload_table)
+    else:
+        story.append(Paragraph("No reviewer assignments for this cycle.", styles['Normal']))
+
     story.append(Spacer(1, 20))
     story.append(Paragraph(
         f"Generated on {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",

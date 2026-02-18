@@ -150,7 +150,7 @@ class FinalDecisionSerializer(serializers.ModelSerializer):
 class FinalDecisionCreateSerializer(serializers.Serializer):
     """Serializer for creating Final Decision."""
     decision = serializers.ChoiceField(choices=FinalDecision.Decision.choices)
-    approved_grant_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    approved_grant_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
     final_remarks = serializers.CharField()
 
 

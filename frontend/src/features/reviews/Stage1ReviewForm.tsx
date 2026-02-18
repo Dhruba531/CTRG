@@ -115,7 +115,7 @@ const Stage1ReviewForm: React.FC = () => {
 
     const handleSubmit = async () => {
         // Validate all scores are filled
-        const hasEmptyScores = Object.values(scores).some(s => s === 0);
+        const hasEmptyScores = Object.values(scores).some(s => s == null);
         if (hasEmptyScores) {
             setError('Please provide scores for all criteria');
             return;

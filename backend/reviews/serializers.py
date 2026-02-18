@@ -16,7 +16,7 @@ class ReviewerProfileSerializer(serializers.ModelSerializer):
         model = ReviewerProfile
         fields = [
             'id', 'user', 'user_email', 'user_name',
-            'area_of_expertise', 'max_review_load', 'is_active_reviewer',
+            'department', 'area_of_expertise', 'max_review_load', 'is_active_reviewer',
             'current_workload', 'can_accept_more'
         ]
         read_only_fields = ['user']
@@ -86,7 +86,7 @@ class Stage2ReviewSerializer(serializers.ModelSerializer):
             'id', 'assignment',
             'concerns_addressed', 'concerns_addressed_display',
             'revised_recommendation', 'revised_recommendation_display',
-            'revised_score', 'comments',
+            'revised_score', 'technical_comments', 'budget_comments',
             'submitted_at', 'is_draft'
         ]
         read_only_fields = ['assignment', 'submitted_at']
@@ -135,6 +135,7 @@ class ReviewerWorkloadSerializer(serializers.Serializer):
     user_name = serializers.CharField()
     is_active_reviewer = serializers.BooleanField()
     max_review_load = serializers.IntegerField()
+    department = serializers.CharField(allow_blank=True)
     area_of_expertise = serializers.CharField(allow_blank=True)
     current_workload = serializers.IntegerField()
     can_accept_more = serializers.BooleanField()

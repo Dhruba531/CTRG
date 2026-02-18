@@ -309,9 +309,12 @@ class DashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def reviewer(self, request):
         """Reviewer dashboard statistics."""
+        if not request.user.groups.filter(name='Reviewer').exists() and not request.user.is_staff:
+            return Response({'error': 'Reviewer access required'}, status=status.HTTP_403_FORBIDDEN)
+
         from reviews.models import ReviewAssignment
         from reviews.serializers import ReviewAssignmentSerializer
-        
+
         assignments = ReviewAssignment.objects.filter(reviewer=request.user)
         
         data = {
@@ -329,6 +332,9 @@ class DashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def pi(self, request):
         """PI dashboard statistics."""
+        if not request.user.groups.filter(name='PI').exists() and not request.user.is_staff:
+            return Response({'error': 'PI access required'}, status=status.HTTP_403_FORBIDDEN)
+
         proposals = Proposal.objects.filter(pi_email=request.user.email)
         
         # Find proposals with upcoming revision deadlines

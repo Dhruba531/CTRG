@@ -215,6 +215,11 @@ MEDIA_ROOT = BASE_DIR / 'media'
 FILE_UPLOAD_MAX_MEMORY_SIZE = env.int('FILE_UPLOAD_MAX_MEMORY_SIZE', default=52428800)  # 50MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int('DATA_UPLOAD_MAX_MEMORY_SIZE', default=52428800)  # 50MB
 
+# File encryption at rest
+# Generate a key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# When not set, files are stored unencrypted (development fallback).
+FILE_ENCRYPTION_KEY = env('FILE_ENCRYPTION_KEY', default='')
+
 # ========================================
 # Authentication Configuration
 # ========================================

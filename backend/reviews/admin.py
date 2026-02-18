@@ -7,9 +7,9 @@ from .models import ReviewerProfile, ReviewAssignment, Stage1Score, Stage2Review
 
 @admin.register(ReviewerProfile)
 class ReviewerProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'area_of_expertise', 'max_review_load', 'is_active_reviewer']
-    list_filter = ['is_active_reviewer', 'area_of_expertise']
-    search_fields = ['user__username', 'user__email', 'area_of_expertise']
+    list_display = ['user', 'department', 'area_of_expertise', 'max_review_load', 'is_active_reviewer']
+    list_filter = ['is_active_reviewer', 'department']
+    search_fields = ['user__username', 'user__email', 'department', 'area_of_expertise']
 
 
 @admin.register(ReviewAssignment)
@@ -36,8 +36,9 @@ class Stage1ScoreAdmin(admin.ModelAdmin):
 
 @admin.register(Stage2Review)
 class Stage2ReviewAdmin(admin.ModelAdmin):
-    list_display = ['get_proposal', 'get_reviewer', 'concerns_addressed', 'revised_recommendation', 'is_draft']
+    list_display = ['get_proposal', 'get_reviewer', 'concerns_addressed', 'revised_recommendation', 'is_draft', 'submitted_at']
     list_filter = ['concerns_addressed', 'revised_recommendation', 'is_draft']
+    readonly_fields = ['submitted_at']
     
     def get_proposal(self, obj):
         return obj.assignment.proposal.proposal_code

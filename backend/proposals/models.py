@@ -1,6 +1,9 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from proposals.storage import EncryptedFileStorage
+
+encrypted_storage = EncryptedFileStorage()
 
 class GrantCycle(models.Model):
     """
@@ -80,11 +83,11 @@ class Proposal(models.Model):
     # Financial
     fund_requested = models.DecimalField(max_digits=12, decimal_places=2, help_text="Amount of funding requested")
     
-    # Files
-    proposal_file = models.FileField(upload_to='proposals/', null=True, blank=True, help_text="Full research proposal (PDF)")
-    application_template_file = models.FileField(upload_to='proposals/templates/', null=True, blank=True, help_text="Research Grant Application Template (PDF/Word)")
-    revised_proposal_file = models.FileField(upload_to='proposals/revisions/', null=True, blank=True, help_text="Revised proposal after Stage 1 review")
-    response_to_reviewers_file = models.FileField(upload_to='proposals/responses/', null=True, blank=True, help_text="Optional response to reviewer comments")
+    # Files (encrypted at rest when FILE_ENCRYPTION_KEY is configured)
+    proposal_file = models.FileField(upload_to='proposals/', storage=encrypted_storage, null=True, blank=True, help_text="Full research proposal (PDF)")
+    application_template_file = models.FileField(upload_to='proposals/templates/', storage=encrypted_storage, null=True, blank=True, help_text="Research Grant Application Template (PDF/Word)")
+    revised_proposal_file = models.FileField(upload_to='proposals/revisions/', storage=encrypted_storage, null=True, blank=True, help_text="Revised proposal after Stage 1 review")
+    response_to_reviewers_file = models.FileField(upload_to='proposals/responses/', storage=encrypted_storage, null=True, blank=True, help_text="Optional response to reviewer comments")
     
     # Relationships
     cycle = models.ForeignKey(GrantCycle, on_delete=models.CASCADE, related_name='proposals')

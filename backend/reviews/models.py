@@ -8,6 +8,7 @@ class ReviewerProfile(models.Model):
     Extended profile for reviewers with workload management.
     """
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reviewer_profile')
+    department = models.CharField(max_length=255, blank=True, default='', help_text="Reviewer's department")
     area_of_expertise = models.TextField(help_text="Reviewer's area of expertise")
     max_review_load = models.IntegerField(default=5, help_text="Maximum number of concurrent reviews")
     is_active_reviewer = models.BooleanField(default=True, help_text="Whether this reviewer is currently active")
@@ -169,7 +170,14 @@ class Stage2Review(models.Model):
         blank=True,
         help_text="Optional revised score (0-100)"
     )
-    comments = models.TextField(help_text="Comments on the revised proposal")
+    technical_comments = models.TextField(
+        help_text="Comments on how PI addressed technical and methodological concerns"
+    )
+    budget_comments = models.TextField(
+        blank=True,
+        default='',
+        help_text="Comments on budget revisions and justifications (if applicable)"
+    )
     
     # Metadata
     submitted_at = models.DateTimeField(auto_now_add=True)

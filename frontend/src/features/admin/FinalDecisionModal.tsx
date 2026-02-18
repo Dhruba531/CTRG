@@ -170,10 +170,16 @@ const FinalDecisionModal: React.FC<Props> = ({ proposal, onClose, onSuccess }) =
                                             )}
                                         </div>
 
-                                        {review.stage2_review?.comments && (
+                                        {review.stage2_review?.technical_comments && (
                                             <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded mt-2">
                                                 <FileText size={14} className="inline mr-1" />
-                                                {review.stage2_review.comments}
+                                                <strong>Technical:</strong> {review.stage2_review.technical_comments}
+                                            </div>
+                                        )}
+                                        {review.stage2_review?.budget_comments && (
+                                            <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded mt-2">
+                                                <FileText size={14} className="inline mr-1" />
+                                                <strong>Budget:</strong> {review.stage2_review.budget_comments}
                                             </div>
                                         )}
                                     </div>

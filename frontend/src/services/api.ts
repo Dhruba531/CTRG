@@ -212,6 +212,7 @@ export interface Reviewer {
     user: number;
     user_email: string;
     user_name: string;
+    department: string;
     area_of_expertise: string;
     max_review_load: number;
     is_active_reviewer: boolean;
@@ -256,9 +257,8 @@ export interface Stage2Review {
     id: number;
     concerns_addressed: string;
     revised_recommendation: string;
-    technical_comments?: string;
-    budget_comments?: string;
-    comments?: string;
+    technical_comments: string;
+    budget_comments: string;
     revised_score?: number;
 }
 

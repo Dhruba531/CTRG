@@ -99,6 +99,10 @@ class ProposalService:
             # Allow but log the override
             pass  # Chair can accept below threshold at their discretion
 
+        # Guard against duplicate decisions
+        if hasattr(proposal, 'stage1_decision'):
+            raise ValueError("Stage 1 decision already exists for this proposal")
+
         # Create decision record
         stage1_decision = Stage1Decision.objects.create(
             proposal=proposal,
@@ -405,6 +409,7 @@ class ReviewerService:
                 'user_name': profile.user.get_full_name() or profile.user.username,
                 'is_active_reviewer': profile.is_active_reviewer,
                 'max_review_load': profile.max_review_load,
+                'department': profile.department,
                 'area_of_expertise': profile.area_of_expertise,
                 'current_workload': current_workload,
                 'can_accept_more': profile.can_accept_review(),
@@ -497,7 +502,31 @@ CTRG Grant Review System
             message=message,
             recipient_list=[proposal.pi_email]
         )
-    
+
+    @staticmethod
+    def send_deadline_missed_email(proposal):
+        """Send email to PI notifying that revision deadline has passed."""
+        subject = f"Revision Deadline Missed: {proposal.proposal_code}"
+        message = f"""
+Dear {proposal.pi_name},
+
+The revision deadline for your proposal "{proposal.title}" has passed.
+
+Proposal Code: {proposal.proposal_code}
+Deadline Was: {proposal.revision_deadline.strftime('%Y-%m-%d %H:%M') if proposal.revision_deadline else 'N/A'}
+
+Your proposal has been marked as "Revision Deadline Missed". Please contact the SRC Chair if you have any questions.
+
+Best regards,
+CTRG Grant Review System
+        """
+
+        return EmailService._send_email(
+            subject=subject,
+            message=message,
+            recipient_list=[proposal.pi_email]
+        )
+
     @staticmethod
     def send_final_decision_email(proposal):
         """Send email to PI about final decision."""

@@ -67,11 +67,12 @@ const ReviewerManagement: React.FC = () => {
         try {
             setSaving(true);
             await reviewerApi.update(editingReviewer.id, {
+                department: editingReviewer.department,
                 area_of_expertise: editingReviewer.area_of_expertise,
                 max_review_load: editingReviewer.max_review_load,
             });
             setReviewers(prev => prev.map(r =>
-                r.id === editingReviewer.id ? { ...r, area_of_expertise: editingReviewer.area_of_expertise, max_review_load: editingReviewer.max_review_load } : r
+                r.id === editingReviewer.id ? { ...r, department: editingReviewer.department, area_of_expertise: editingReviewer.area_of_expertise, max_review_load: editingReviewer.max_review_load } : r
             ));
             setEditingReviewer(null);
             alert('Reviewer updated successfully');
@@ -278,6 +279,9 @@ const ReviewerManagement: React.FC = () => {
                                     Reviewer
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Department
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Expertise
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -307,6 +311,9 @@ const ReviewerManagement: React.FC = () => {
                                                 </div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-gray-900">{reviewer.department || '—'}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-sm text-gray-900 max-w-xs truncate" title={reviewer.area_of_expertise}>
@@ -376,6 +383,15 @@ const ReviewerManagement: React.FC = () => {
                             <p className="text-sm text-gray-500">{editingReviewer.user_name}</p>
                         </div>
                         <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                                <input
+                                    type="text"
+                                    value={editingReviewer.department || ''}
+                                    onChange={(e) => setEditingReviewer({ ...editingReviewer, department: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Area of Expertise</label>
                                 <input
@@ -547,6 +563,10 @@ const ReviewerManagement: React.FC = () => {
                             </div>
                         </div>
                         <div className="p-6 space-y-4">
+                            <div>
+                                <h3 className="text-sm font-medium text-gray-500">Department</h3>
+                                <p className="mt-1 text-gray-900">{selectedReviewer.department || '—'}</p>
+                            </div>
                             <div>
                                 <h3 className="text-sm font-medium text-gray-500">Area of Expertise</h3>
                                 <p className="mt-1 text-gray-900">{selectedReviewer.area_of_expertise}</p>
