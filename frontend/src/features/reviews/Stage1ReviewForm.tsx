@@ -1,21 +1,24 @@
 /**
  * Stage 1 Review Form Component.
- * Implements the exact 8 criteria scoring system:
- * - Originality (0-15)
- * - Clarity (0-15)
- * - Literature Review (0-15)
- * - Methodology (0-15)
- * - Impact (0-15)
- * - Publication Potential (0-10)
- * - Budget Appropriateness (0-10)
- * - Timeline Practicality (0-5)
- * Total: 100 points
+ *
+ * Implements the CTRG 8-criteria scoring rubric (total: 100 points):
+ *   - 5 criteria scored 0-15 (Originality, Clarity, Literature Review, Methodology, Impact)
+ *   - 2 criteria scored 0-10 (Publication Potential, Budget Appropriateness)
+ *   - 1 criterion  scored 0-5  (Timeline Practicality)
+ *
+ * Supports two submit paths (same pattern as ProposalForm):
+ *   - Save Draft: persists scores without validation, reviewer can return later
+ *   - Submit Review: validates all scores + comments, then finalizes (irreversible)
+ *
+ * Score input uses both a range slider and a number input for accessibility.
+ * A color-coded progress bar provides visual feedback on each criterion.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Send, ArrowLeft, FileText, AlertCircle } from 'lucide-react';
 import { assignmentApi, type ReviewAssignment, type Stage1Score } from '../../services/api';
 
+/** Configuration for a single scoring criterion — drives the form UI. */
 interface CriteriaConfig {
     key: keyof Omit<Stage1Score, 'id' | 'narrative_comments' | 'total_score' | 'percentage_score'>;
     label: string;
@@ -23,6 +26,11 @@ interface CriteriaConfig {
     maxScore: number;
 }
 
+/**
+ * Scoring criteria definitions — single source of truth for the review form.
+ * The order here determines the display order in the UI.
+ * maxScore values must match the backend Stage1ScoreSerializer validation limits.
+ */
 const CRITERIA: CriteriaConfig[] = [
     { key: 'originality_score', label: 'Originality', description: 'Innovation and novelty of the research idea', maxScore: 15 },
     { key: 'clarity_score', label: 'Clarity', description: 'Clear presentation of objectives and methodology', maxScore: 15 },
@@ -88,9 +96,11 @@ const Stage1ReviewForm: React.FC = () => {
         loadAssignment();
     }, [loadAssignment]);
 
+    // Derived values — recalculated on every render (cheap since it's just 8 additions)
     const totalScore = Object.values(scores).reduce((sum, score) => sum + score, 0);
     const percentageScore = Math.round((totalScore / 100) * 100);
 
+    /** Clamp the score to [0, maxScore] to prevent out-of-range values from manual input. */
     const handleScoreChange = (key: string, value: number, maxScore: number) => {
         const clampedValue = Math.max(0, Math.min(value, maxScore));
         setScores(prev => ({ ...prev, [key]: clampedValue }));
@@ -146,6 +156,10 @@ const Stage1ReviewForm: React.FC = () => {
         }
     };
 
+    /**
+     * Map a score ratio to a color band for the progress bar indicator.
+     * Bands: >=80% green, >=60% yellow, >=40% orange, <40% red.
+     */
     const getScoreColor = (score: number, max: number) => {
         const ratio = score / max;
         if (ratio >= 0.8) return 'bg-green-500';

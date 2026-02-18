@@ -1,17 +1,33 @@
 """
 Serializers for the reviews module.
+
+Covers three main areas:
+- Reviewer profiles (capacity, expertise, workload)
+- Stage 1 scoring (8-criteria rubric with validation)
+- Stage 2 reviews (revision assessment after tentative acceptance)
+- Review assignments (links reviewers to proposals with nested scores)
 """
 from rest_framework import serializers
 from .models import ReviewerProfile, ReviewAssignment, Stage1Score, Stage2Review
 
 
+# =============================================================================
+# Reviewer Profile
+# =============================================================================
+
 class ReviewerProfileSerializer(serializers.ModelSerializer):
-    """Serializer for ReviewerProfile."""
+    """Serializer for ReviewerProfile.
+
+    Includes computed fields (current_workload, can_accept_more) that the
+    SRC Chair uses to decide whether to assign more reviews to this reviewer.
+    """
+    # Flatten user fields so the frontend doesn't need nested user lookups
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_name = serializers.SerializerMethodField()
+    # These delegate to model methods that count active (non-completed) assignments
     current_workload = serializers.SerializerMethodField()
     can_accept_more = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = ReviewerProfile
         fields = [
@@ -20,22 +36,35 @@ class ReviewerProfileSerializer(serializers.ModelSerializer):
             'current_workload', 'can_accept_more'
         ]
         read_only_fields = ['user']
-    
+
     def get_user_name(self, obj):
         return obj.user.get_full_name() or obj.user.username
-    
+
     def get_current_workload(self, obj):
         return obj.current_review_count()
-    
+
     def get_can_accept_more(self, obj):
+        """True if current workload is below max_review_load."""
         return obj.can_accept_review()
 
 
+# =============================================================================
+# Stage 1 Scoring
+# =============================================================================
+
 class Stage1ScoreSerializer(serializers.ModelSerializer):
-    """Serializer for Stage 1 Review Scores."""
+    """Serializer for Stage 1 Review Scores.
+
+    The 8-criteria rubric totals 100 points:
+      - 5 criteria worth 0-15 each (75 pts)
+      - 2 criteria worth 0-10 each (20 pts)
+      - 1 criterion  worth 0-5      (5 pts)
+
+    total_score and percentage_score are computed by the model and read-only.
+    """
     total_score = serializers.IntegerField(read_only=True)
     percentage_score = serializers.IntegerField(read_only=True)
-    
+
     class Meta:
         model = Stage1Score
         fields = [
@@ -46,10 +75,16 @@ class Stage1ScoreSerializer(serializers.ModelSerializer):
             'narrative_comments', 'total_score', 'percentage_score',
             'submitted_at', 'is_draft'
         ]
+        # assignment is set by the view, submitted_at is auto-set on final submit
         read_only_fields = ['assignment', 'submitted_at']
-    
+
     def validate(self, data):
-        """Validate score ranges."""
+        """Validate that each score falls within its allowed range.
+
+        Different criteria have different maximums (15, 10, or 5), so we
+        can't use a single model-level validator. This dict-based approach
+        keeps the limits in one place and produces field-specific errors.
+        """
         score_limits = {
             'originality_score': 15,
             'clarity_score': 15,
@@ -60,26 +95,35 @@ class Stage1ScoreSerializer(serializers.ModelSerializer):
             'budget_appropriateness_score': 10,
             'timeline_practicality_score': 5,
         }
-        
+
         for field, max_val in score_limits.items():
             if field in data:
                 if data[field] < 0 or data[field] > max_val:
                     raise serializers.ValidationError({
                         field: f"Score must be between 0 and {max_val}"
                     })
-        
+
         return data
 
 
+# =============================================================================
+# Stage 2 Review
+# =============================================================================
+
 class Stage2ReviewSerializer(serializers.ModelSerializer):
-    """Serializer for Stage 2 Review."""
+    """Serializer for Stage 2 Review.
+
+    Stage 2 reviews assess whether the PI adequately addressed Stage 1 concerns.
+    The reviewer rates concerns_addressed (e.g., fully/partially/not) and provides
+    a revised recommendation. The _display fields give human-readable labels.
+    """
     concerns_addressed_display = serializers.CharField(
         source='get_concerns_addressed_display', read_only=True
     )
     revised_recommendation_display = serializers.CharField(
         source='get_revised_recommendation_display', read_only=True
     )
-    
+
     class Meta:
         model = Stage2Review
         fields = [
@@ -92,10 +136,20 @@ class Stage2ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ['assignment', 'submitted_at']
 
 
+# =============================================================================
+# Review Assignment (ties a reviewer to a proposal for a given stage)
+# =============================================================================
+
 class ReviewAssignmentSerializer(serializers.ModelSerializer):
-    """Serializer for Review Assignments."""
+    """Serializer for Review Assignments.
+
+    Nests the full Stage1Score and Stage2Review so a single API call returns
+    the assignment together with its review data. The nested serializers are
+    read-only — scores/reviews are submitted through dedicated endpoints.
+    """
     stage1_score = Stage1ScoreSerializer(read_only=True)
     stage2_review = Stage2ReviewSerializer(read_only=True)
+    # Flattened proposal/reviewer fields avoid requiring extra API calls
     proposal_title = serializers.CharField(source='proposal.title', read_only=True)
     proposal_code = serializers.CharField(source='proposal.proposal_code', read_only=True)
     reviewer_name = serializers.SerializerMethodField()
@@ -114,13 +168,17 @@ class ReviewAssignmentSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['assigned_date', 'created_at', 'updated_at']
-    
+
     def get_reviewer_name(self, obj):
         return obj.reviewer.get_full_name() or obj.reviewer.username
 
 
 class ReviewAssignmentCreateSerializer(serializers.Serializer):
-    """Serializer for creating review assignments."""
+    """Serializer for bulk-creating review assignments.
+
+    The SRC Chair selects one proposal, multiple reviewers, a review stage
+    (1 or 2), and a deadline. The view creates one assignment per reviewer.
+    """
     proposal_id = serializers.IntegerField()
     reviewer_ids = serializers.ListField(child=serializers.IntegerField())
     stage = serializers.IntegerField()
@@ -128,7 +186,13 @@ class ReviewAssignmentCreateSerializer(serializers.Serializer):
 
 
 class ReviewerWorkloadSerializer(serializers.Serializer):
-    """Serializer for reviewer workload stats (matches frontend Reviewer type)."""
+    """Serializer for reviewer workload statistics.
+
+    Designed to match the frontend's Reviewer TypeScript type exactly, so the
+    response can be used directly without transformation. Includes both profile
+    fields (department, expertise) and computed assignment counts (total, pending,
+    completed, stage-specific pending).
+    """
     id = serializers.IntegerField()
     user = serializers.IntegerField()
     user_email = serializers.EmailField()

@@ -1,6 +1,12 @@
 """
 Report Generation Module.
-Generates PDF and Word documents for proposals and reviews.
+
+Generates PDF reports using ReportLab for:
+- Combined review reports (all Stage 1 + Stage 2 reviews for a single proposal)
+- Cycle summary reports (status counts, acceptance rates, reviewer workload)
+
+Both functions return a BytesIO buffer so the caller can stream it as an
+HTTP response without writing temp files to disk.
 """
 import io
 import logging
@@ -15,7 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_text(value):
-    """Escape dynamic values before inserting into ReportLab Paragraph markup."""
+    """Escape dynamic values before inserting into ReportLab Paragraph markup.
+
+    ReportLab's Paragraph uses XML-like markup, so unescaped user input
+    (e.g., angle brackets in a title) would break the PDF rendering.
+    """
     if value is None:
         return ""
     return escape(str(value))
@@ -31,6 +41,9 @@ def generate_combined_review_pdf(proposal):
     Returns:
         BytesIO buffer containing the PDF
     """
+    # Lazy import — reportlab is a large library, so only load it when actually
+    # generating a PDF. This also provides a graceful degradation message if
+    # the dependency is missing in a lightweight deployment.
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import letter
@@ -38,30 +51,30 @@ def generate_combined_review_pdf(proposal):
         from reportlab.lib.units import inch
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     except ImportError:
-        # Fallback if reportlab is not installed
         buffer = io.BytesIO()
         buffer.write(b"Report generation requires reportlab. Please install it with: pip install reportlab")
         buffer.seek(0)
         return buffer
-    
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
-    
+
+    # ReportLab uses a "story" list — each element is rendered sequentially in the PDF
     story = []
     styles = getSampleStyleSheet()
-    
-    # Title
+
+    # --- Report Title ---
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
         fontSize=16,
         spaceAfter=30,
-        alignment=1  # Center
+        alignment=1  # Center alignment
     )
     story.append(Paragraph("Combined Review Report", title_style))
     story.append(Spacer(1, 12))
-    
-    # Proposal Details
+
+    # --- Proposal Metadata Section ---
     fund_requested = proposal.fund_requested
     if fund_requested is None:
         fund_requested_text = "N/A"
@@ -75,24 +88,28 @@ def generate_combined_review_pdf(proposal):
     story.append(Paragraph(f"<b>Status:</b> {_safe_text(proposal.get_status_display())}", styles['Normal']))
     story.append(Spacer(1, 20))
     
-    # Stage 1 Reviews
+    # --- Stage 1 Reviews Section ---
+    # Each completed Stage 1 assignment gets a score table showing all 8 criteria
+    # with their individual scores, plus the computed total and percentage.
     story.append(Paragraph("Stage 1 Reviews", styles['Heading2']))
     story.append(Spacer(1, 10))
-    
+
     from reviews.models import ReviewAssignment
     stage1_assignments = ReviewAssignment.objects.filter(
         proposal=proposal,
         stage=ReviewAssignment.Stage.STAGE_1,
         status=ReviewAssignment.Status.COMPLETED
     ).select_related('stage1_score')
-    
+
     for i, assignment in enumerate(stage1_assignments, 1):
+        # Reviewers are numbered anonymously (Reviewer 1, 2, ...) to preserve blinding
         story.append(Paragraph(f"<b>Reviewer {i}</b>", styles['Heading3']))
-        
+
         try:
             score = assignment.stage1_score
-            
-            # Score table
+
+            # 8-criteria scoring table matching the Stage1Score model fields.
+            # Max scores: 5 criteria × 15pts + 2 × 10pts + 1 × 5pts = 100 total.
             score_data = [
                 ['Criteria', 'Score', 'Max'],
                 ['Originality', str(score.originality_score), '15'],
@@ -106,16 +123,16 @@ def generate_combined_review_pdf(proposal):
                 ['Total', str(score.total_score), '100'],
                 ['Percentage', f"{score.percentage_score}%", '-'],
             ]
-            
+
             table = Table(score_data, colWidths=[2.5*inch, 1*inch, 0.75*inch])
             table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),        # Header row styling
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 11),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, -2), (-1, -1), colors.beige),
+                ('BACKGROUND', (0, -2), (-1, -1), colors.beige),     # Total/percentage rows highlighted
                 ('GRID', (0, 0), (-1, -1), 1, colors.black)
             ]))
             story.append(table)
@@ -136,11 +153,13 @@ def generate_combined_review_pdf(proposal):
     if not stage1_assignments.exists():
         story.append(Paragraph("No Stage 1 reviews completed yet.", styles['Normal']))
     
-    # Stage 2 Reviews if applicable
+    # --- Stage 2 Reviews Section ---
+    # Stage 2 only applies to proposals that were tentatively accepted or had
+    # revisions requested. These reviews assess whether the PI addressed concerns.
     story.append(Spacer(1, 20))
     story.append(Paragraph("Stage 2 Reviews", styles['Heading2']))
     story.append(Spacer(1, 10))
-    
+
     stage2_assignments = ReviewAssignment.objects.filter(
         proposal=proposal,
         stage=ReviewAssignment.Stage.STAGE_2,
@@ -173,13 +192,14 @@ def generate_combined_review_pdf(proposal):
     if not stage2_assignments.exists():
         story.append(Paragraph("No Stage 2 reviews completed yet.", styles['Normal']))
     
-    # Footer
+    # --- Footer with generation timestamp ---
     story.append(Spacer(1, 30))
     story.append(Paragraph(
         f"Generated on {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",
         ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
     ))
-    
+
+    # Build the PDF into the in-memory buffer and rewind for reading
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -195,6 +215,7 @@ def generate_summary_report(cycle):
     Returns:
         BytesIO buffer containing the PDF
     """
+    # Lazy import (same pattern as generate_combined_review_pdf)
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import letter
@@ -206,24 +227,26 @@ def generate_summary_report(cycle):
         buffer.write(b"Report generation requires reportlab.")
         buffer.seek(0)
         return buffer
-    
+
     from proposals.models import Proposal
-    
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
-    
+
     story = []
     styles = getSampleStyleSheet()
-    
-    # Title
+
+    # --- Report Header ---
     story.append(Paragraph("CTRG Grant Cycle Summary Report", styles['Heading1']))
     story.append(Paragraph(f"{_safe_text(cycle.name)} ({_safe_text(cycle.year)})", styles['Heading2']))
     story.append(Spacer(1, 20))
-    
+
+    # --- Count proposals by status ---
+    # Individual queries are used instead of aggregation because each status
+    # maps to a specific row in the summary table.
     proposals = cycle.proposals.all()
     total_count = proposals.count()
 
-    # Status counts
     submitted_count = proposals.filter(status=Proposal.Status.SUBMITTED).count()
     under_s1_count = proposals.filter(status=Proposal.Status.UNDER_STAGE_1_REVIEW).count()
     s1_rejected_count = proposals.filter(status=Proposal.Status.STAGE_1_REJECTED).count()
@@ -235,15 +258,19 @@ def generate_summary_report(cycle):
     final_accepted_count = proposals.filter(status=Proposal.Status.FINAL_ACCEPTED).count()
     final_rejected_count = proposals.filter(status=Proposal.Status.FINAL_REJECTED).count()
 
-    # Acceptance rates
+    # --- Acceptance Rate Calculations ---
+    # Stage 1 rate: proposals that passed Stage 1 ÷ all proposals with a Stage 1 decision.
+    # "Passed Stage 1" includes accepted-no-corrections, tentatively accepted,
+    # and any that ultimately reached a final decision.
     s1_decided = s1_rejected_count + accepted_no_corr_count + tentatively_count + final_accepted_count + final_rejected_count
     s1_accepted = accepted_no_corr_count + tentatively_count + final_accepted_count
     s1_rate = f"{(s1_accepted / s1_decided * 100):.1f}%" if s1_decided > 0 else "N/A"
 
+    # Final rate: proposals with a final accept ÷ all proposals with any final decision
     final_decided = final_accepted_count + final_rejected_count
     final_rate = f"{(final_accepted_count / final_decided * 100):.1f}%" if final_decided > 0 else "N/A"
 
-    # Statistics table
+    # --- Status Breakdown Table ---
     stats = [
         ['Status', 'Count'],
         ['Total Proposals', str(total_count)],
@@ -286,7 +313,9 @@ def generate_summary_report(cycle):
     story.append(rates_table)
     story.append(Spacer(1, 20))
 
-    # Reviewer Workload Breakdown
+    # --- Reviewer Workload Breakdown ---
+    # Uses Django ORM annotations to compute per-reviewer stats in a single query.
+    # Filtered to only include reviewers who have at least one assignment in this cycle.
     story.append(Paragraph("Reviewer Workload Summary", styles['Heading2']))
     story.append(Spacer(1, 8))
 
@@ -310,7 +339,7 @@ def generate_summary_report(cycle):
             user__review_assignments__status=ReviewAssignment.Status.PENDING,
             user__review_assignments__proposal__cycle=cycle,
         )),
-    ).distinct()
+    ).distinct()  # distinct() needed because the filter join can produce duplicates
 
     workload_data = [['Reviewer', 'Department', 'Stage 1', 'Stage 2', 'Total', 'Pending']]
 
@@ -340,12 +369,14 @@ def generate_summary_report(cycle):
     else:
         story.append(Paragraph("No reviewer assignments for this cycle.", styles['Normal']))
 
+    # --- Footer ---
     story.append(Spacer(1, 20))
     story.append(Paragraph(
         f"Generated on {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",
         ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
     ))
-    
+
+    # Build PDF and rewind buffer for the caller to read
     doc.build(story)
     buffer.seek(0)
     return buffer

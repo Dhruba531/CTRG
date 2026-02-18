@@ -1,6 +1,17 @@
 /**
- * Enhanced SRC Chair Dashboard Component.
- * Main dashboard with statistics, quick actions, and recent activity.
+ * SRC Chair Dashboard Component.
+ *
+ * The primary landing page for the SRC Chair role. Displays:
+ * - Summary stat cards (total proposals, pending reviews, awaiting decision/revision)
+ * - Proposal status distribution chart
+ * - Quick-action links to management pages
+ * - Recent activity timeline
+ * - Recent proposals list with status badges
+ * - Grant cycle progress indicator
+ *
+ * Data is loaded from two parallel API calls (stats + proposals) on mount,
+ * with a manual refresh button. On API failure, the dashboard degrades
+ * gracefully by showing zeroed-out stats rather than an error screen.
  */
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,19 +26,24 @@ import { CycleProgress } from '../../components/dashboard/CycleProgress';
 import { StatusChart } from '../../components/dashboard/StatusChart';
 import { mockActivities } from '../../data/mockData';
 
+/** Matches the backend DashboardStatsSerializer shape. */
 interface DashboardStats {
     total_proposals: number;
     pending_reviews: number;
     awaiting_decision: number;
     awaiting_revision: number;
+    /** Maps status strings (e.g., "SUBMITTED") to their counts */
     status_breakdown: Record<string, number>;
 }
 
 const SRCChairDashboard: React.FC = () => {
     const [stats, setStats] = useState<DashboardStats | null>(null);
+    // Only the 5 most recent proposals are shown on the dashboard
     const [recentProposals, setRecentProposals] = useState<Proposal[]>([]);
     const [loading, setLoading] = useState(true);
+    // Separate from loading — tracks manual refresh so the spinner doesn't block the whole page
     const [refreshing, setRefreshing] = useState(false);
+    // Formatted date string for the welcome banner
     const [currentDate, setCurrentDate] = useState(() =>
         new Date().toLocaleDateString('en-US', {
             weekday: 'long',
@@ -57,9 +73,12 @@ const SRCChairDashboard: React.FC = () => {
         return () => window.clearInterval(intervalId);
     }, []);
 
+    /** Fetch dashboard stats and recent proposals in parallel.
+     *  On failure, falls back to empty/zero values so the UI still renders. */
     const loadDashboard = async () => {
         try {
             setLoading(true);
+            // Parallel fetch — stats and proposals are independent
             const [statsRes, proposalsRes] = await Promise.all([
                 dashboardApi.getSrcChairStats(),
                 proposalApi.getAll(),
@@ -67,6 +86,7 @@ const SRCChairDashboard: React.FC = () => {
             setStats(statsRes.data);
             setRecentProposals(proposalsRes.data.slice(0, 5));
         } catch {
+            // Graceful degradation — show zeroed dashboard rather than error screen
             setStats({
                 total_proposals: 0,
                 pending_reviews: 0,
@@ -86,6 +106,8 @@ const SRCChairDashboard: React.FC = () => {
         setRefreshing(false);
     };
 
+    // Dashboard stat cards — each maps to a key from DashboardStats.
+    // cssColor is used for the decorative background blur; bgColor for Tailwind classes.
     const statusCards = [
         { label: 'Total Proposals', value: stats?.total_proposals || 0, icon: FileText, bgColor: 'bg-blue-500', cssColor: '#3b82f6' },
         { label: 'Pending Reviews', value: stats?.pending_reviews || 0, icon: Clock, bgColor: 'bg-yellow-500', cssColor: '#eab308' },
@@ -100,6 +122,12 @@ const SRCChairDashboard: React.FC = () => {
         { label: 'Generate Reports', icon: Download, path: '/admin/reports', color: 'bg-purple-600' },
     ];
 
+    /**
+     * Map proposal status enum values to Tailwind CSS badge classes.
+     * Colors follow a semantic convention: blue=in-progress, green=accepted,
+     * red=rejected, orange/yellow=needs-attention. Falls back to gray for
+     * any unrecognized status (e.g., future status values).
+     */
     const getStatusColor = (status: string) => {
         const colors: Record<string, string> = {
             SUBMITTED: 'bg-blue-100 text-blue-800',

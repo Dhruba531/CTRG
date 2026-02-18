@@ -1,13 +1,23 @@
 /**
- * Enhanced Proposal Form Component.
- * For creating new proposals or editing drafts.
- * Includes grant cycle selection, file upload with 50MB limit, and draft saving.
+ * Proposal Form Component.
+ *
+ * Handles both creating new proposals and editing existing drafts (determined
+ * by the presence of an :id route param). The form supports two submit paths:
+ *
+ * 1. **Save Draft** — persists the current form state without validation,
+ *    allowing the PI to return later and continue editing.
+ * 2. **Submit Proposal** — validates all required fields, saves, then
+ *    transitions the proposal status from DRAFT to SUBMITTED (irreversible).
+ *
+ * File uploads are validated client-side for type (PDF/Word) and size (50MB)
+ * before being sent as multipart/form-data to the backend.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Send, ArrowLeft, Upload, FileText, AlertCircle, X } from 'lucide-react';
 import { proposalApi, cycleApi, type GrantCycle } from '../../services/api';
 
+/** Shape of the local form state — matches backend ProposalSerializer fields. */
 interface ProposalFormData {
     title: string;
     abstract: string;
@@ -17,20 +27,25 @@ interface ProposalFormData {
     co_investigators: string;
     fund_requested: number;
     cycle: number | '';
+    /** New file selected by the user (not yet uploaded) */
     file: File | null;
+    /** New application template file selected by the user */
     templateFile: File | null;
 }
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+/** 50MB — matches the backend's upload size limit */
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 const ProposalForm: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    // When id is present in the URL, we're editing an existing draft
     const isEditing = !!id;
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Only active cycles are shown in the dropdown (filtered in loadData)
     const [cycles, setCycles] = useState<GrantCycle[]>([]);
 
     const [formData, setFormData] = useState<ProposalFormData>({
@@ -45,9 +60,11 @@ const ProposalForm: React.FC = () => {
         file: null,
         templateFile: null,
     });
+    // Track previously uploaded files so we can display them even when no new file is selected
     const [existingFile, setExistingFile] = useState<string | null>(null);
     const [existingTemplate, setExistingTemplate] = useState<string | null>(null);
 
+    /** Load active grant cycles and (if editing) the existing proposal data. */
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
@@ -102,6 +119,7 @@ const ProposalForm: React.FC = () => {
         }));
     };
 
+    /** Validate file type and size before accepting the proposal document upload. */
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -109,6 +127,7 @@ const ProposalForm: React.FC = () => {
                 setError('File size exceeds 50MB limit');
                 return;
             }
+            // Accept PDF (.pdf), legacy Word (.doc), and modern Word (.docx)
             if (!['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
                 setError('Only PDF and Word documents are allowed');
                 return;
@@ -142,6 +161,7 @@ const ProposalForm: React.FC = () => {
         setFormData(prev => ({ ...prev, templateFile: null }));
     };
 
+    /** Validate required fields before formal submission (not needed for drafts). */
     const validateForm = (): boolean => {
         if (!formData.title.trim()) {
             setError('Title is required');
@@ -166,6 +186,7 @@ const ProposalForm: React.FC = () => {
         return true;
     };
 
+    /** Convert local state into a FormData object for multipart upload. */
     const buildFormData = () => {
         const data = new FormData();
         data.append('title', formData.title);
@@ -181,6 +202,8 @@ const ProposalForm: React.FC = () => {
         return data;
     };
 
+    /** Save Draft: persists current form state without validation.
+     *  Creates a new proposal or updates the existing one, then navigates away. */
     const handleSaveDraft = async () => {
         try {
             setSubmitting(true);
@@ -203,9 +226,13 @@ const ProposalForm: React.FC = () => {
         }
     };
 
+    /** Submit Proposal: validates, saves, then calls the separate submit endpoint.
+     *  This is a two-step process because the backend requires the proposal to
+     *  exist (with a file) before it can transition to SUBMITTED status. */
     const handleSubmit = async () => {
         if (!validateForm()) return;
 
+        // Confirmation dialog — submission is irreversible
         if (!window.confirm('Are you sure you want to submit this proposal? You will not be able to edit it after submission.')) {
             return;
         }
@@ -217,6 +244,7 @@ const ProposalForm: React.FC = () => {
             const data = buildFormData();
             let proposalId = isEditing ? Number(id) : null;
 
+            // Step 1: Save/create the proposal with all form data and files
             if (isEditing && proposalId !== null) {
                 await proposalApi.update(proposalId, data);
             } else {
@@ -228,6 +256,7 @@ const ProposalForm: React.FC = () => {
                 throw new Error('Unable to determine proposal ID for submission');
             }
 
+            // Step 2: Transition status from DRAFT -> SUBMITTED
             await proposalApi.submit(proposalId);
 
             alert('Proposal submitted successfully!');
